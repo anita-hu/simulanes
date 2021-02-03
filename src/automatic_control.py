@@ -62,6 +62,10 @@ from agents.navigation.behavior_agent import BehaviorAgent  # pylint: disable=im
 from agents.navigation.roaming_agent import RoamingAgent  # pylint: disable=import-error
 from agents.navigation.basic_agent import BasicAgent  # pylint: disable=import-error
 
+# ==============================================================================
+# -- Imports for lanes ---------------------------------------------------------
+# ==============================================================================
+from lane_utils import LaneExtractor
 
 # ==============================================================================
 # -- Global functions ----------------------------------------------------------
@@ -707,6 +711,7 @@ def game_loop(args):
 
             world = World(client.load_world(available_towns[town_idx]), hud, args)
             controller = KeyboardControl(world)
+            lane_ext = LaneExtractor(world)
 
             if args.agent == "Roaming":
                 agent = RoamingAgent(world.player)
@@ -744,6 +749,9 @@ def game_loop(args):
                 # As soon as the server is ready continue!
                 if not world.world.wait_for_tick(10.0):
                     continue
+                    
+                # Visualize lane markings
+                lane_ext.update()
 
                 if args.agent == "Roaming" or args.agent == "Basic":
                     if controller.parse_events():
