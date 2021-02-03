@@ -2,4 +2,4 @@
 
 version=$(cat $(dirname $(realpath -s $0))/"image_version.txt")
 
-docker build --rm --tag simulanes:$version .
+cd client && docker build --rm --tag simulanes/dev:$version .

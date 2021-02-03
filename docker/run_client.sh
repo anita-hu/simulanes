@@ -11,5 +11,5 @@ docker run --gpus all \
            -it \
 	   --user carla \
            -v $PWD/src:/home/carla/PythonAPI/simulanes \
-           simulanes:$version \
+           simulanes/dev:$version \
 	   python3.7 automatic_control.py
