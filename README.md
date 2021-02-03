@@ -6,7 +6,7 @@
 Install [docker](https://docs.docker.com/engine/install/) and [nvidia-container-runtime](https://nvidia.github.io/nvidia-container-runtime/). 
 Then pull the carla docker image:
 ```
-docker pull carlasim/carla:0.9.10
+docker pull carlasim/carla:0.9.11
 ```
 Build the container (downloads additional assets)
 ```
