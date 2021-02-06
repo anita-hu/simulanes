@@ -68,10 +68,10 @@ class LaneExtractor(object):
 
     def get_marking_positions(self, lane_points, crossed, side):
         for point in lane_points:
-            print(point.left_lane_marking.type, point.right_lane_marking.type)
-            print(point.left_lane_marking.color, point.right_lane_marking.color)
+            lane_marking_type = point.left_lane_marking.type if side == side.LEFT else point.right_lane_marking.type
+            lane_marking_color = point.left_lane_marking.color if side == side.LEFT else point.right_lane_marking.color
             # self.world.debug.draw_point(point.transform.location, size=0.1, color=carla.Color(r=0, g=0, b=255), life_time=0.1)
-            if (side == Side.LEFT and point.left_lane_marking.type == carla.libcarla.LaneMarkingType.NONE) or (side == Side.RIGHT and point.right_lane_marking.type == carla.libcarla.LaneMarkingType.NONE):
+            if lane_marking_type == carla.libcarla.LaneMarkingType.NONE:
                 continue
             # Display forward vector
             forward_vector = point.transform.get_forward_vector()
@@ -89,7 +89,7 @@ class LaneExtractor(object):
 
             start_point = point.transform.location
             end_point = start_point + new_vector
-            self.world.debug.draw_point(end_point, size=0.1, color=carla.Color(r=0, g=255, b=0), life_time=0.1)
+            self.world.debug.draw_point(end_point, size=0.1, color=carla.Color(r=0, g=255, b=0, a=255), life_time=0.1)
 
     def update(self):
         ego_location = self.vehicle.get_location()
