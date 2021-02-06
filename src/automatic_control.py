@@ -790,7 +790,7 @@ def game_loop(args):
                     control = agent.run_step()
                     world.player.apply_control(control)
                 
-                vehicle_velocity = agent.vehicle.get_velocity()
+                vehicle_velocity = world.player.get_velocity()
                 x_velocity, y_velocity = int(vehicle_velocity.x), int(vehicle_velocity.y)
                 if x_velocity == 0 and y_velocity == 0:
                     stopped_count += 1
@@ -864,7 +864,7 @@ def main():
     argparser.add_argument("-a", "--agent", type=str,
                            choices=["Behavior", "Roaming", "Basic"],
                            help="select which agent to run",
-                           default="Behavior")
+                           default="Roaming")
     argparser.add_argument(
         '-s', '--seed',
         help='Set seed for repeating executions (default: None)',
