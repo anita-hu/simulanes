@@ -19,6 +19,8 @@ class LaneExtractor(object):
         self.max_waypoint_dist = 50
         self.iteration_limit = 500
         self.max_lane_length = 100
+        self.min_lane_points = 2
+        self.lane_min_y_diff = 5
         self.world2vehicle = None
         self.vehicle2camera = np.array(world.camera_manager.sensor_transform.get_inverse_matrix())
         self.projection_matrix = world.camera_manager.projection_matrix
@@ -71,7 +73,9 @@ class LaneExtractor(object):
             
             self.get_marking_positions(lane_points, lane_dict['crossed'], side)
             
-    def transform_to_camera(self, world_points):
+    def project_to_camera(self, world_points):
+        if not world_points:
+            return world_points
         # Points in map coords of shape (3, num_points).
         world_points = np.array(world_points).T
         
@@ -124,10 +128,30 @@ class LaneExtractor(object):
 
         return points_2d
         
-    def visualize_lanes(self, display, color=(255, 0, 0)):
+    def visualize_lanes(self, display):
+        if len(self.lanes) == 0:
+            return
+        
+        hue_step = 360 // len(self.lanes)
+        hue = 0
         for lane in self.lanes:
+            color = pygame.Color(0, 0, 0)
+            color.hsla = (hue, 90 + np.random.rand() * 10, 50 + np.random.rand() * 10, 100)
+            hue += hue_step
             for point in lane:
                 pygame.draw.circle(display, color, point, 3)
+                
+    def filter_lane(self, lane):
+        if len(lane) == 0:
+            return lane
+            
+        filtered = [lane[0]]
+        for point in lane[1:]:
+            y_diff = filtered[-1][1] - point[1]
+            if y_diff > self.lane_min_y_diff:
+                filtered.append(point)
+                
+        return filtered
 
     def get_marking_positions(self, lane_points, crossed, side):
         lane = []
@@ -156,9 +180,10 @@ class LaneExtractor(object):
             self.world.debug.draw_point(end_point, size=0.1, color=carla.Color(r=0, g=255, b=0, a=255), life_time=0.1)
             lane.append([end_point.x, end_point.y, end_point.z])
         
-        if lane:
-            camera_coord_lane = self.transform_to_camera(lane)
-            self.lanes.append(camera_coord_lane)
+        camera_coord_lane = self.project_to_camera(lane)
+        filtered_lane = self.filter_lane(camera_coord_lane)
+        if len(filtered_lane) >= self.min_lane_points:
+            self.lanes.append(filtered_lane)
 
     def update(self):
         self.lanes = []
