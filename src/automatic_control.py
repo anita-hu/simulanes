@@ -561,6 +561,7 @@ class CameraManager(object):
     def __init__(self, parent_actor, hud, gamma_correction):
         """Constructor method"""
         self.sensor = None
+        self.sensor_transform = None
         self.surface = None
         self._parent = parent_actor
         self.hud = hud
@@ -570,7 +571,7 @@ class CameraManager(object):
         attachment = carla.AttachmentType
         self._camera_transforms = [
             (carla.Transform(
-                carla.Location(x=-5.5, z=2.5), carla.Rotation(pitch=8.0)), attachment.SpringArm),
+                carla.Location(x=0.7,y=-0.4, z=1.2), carla.Rotation(pitch=-5)), attachment.Rigid),
             (carla.Transform(
                 carla.Location(x=1.6, z=1.7)), attachment.Rigid),
             (carla.Transform(
@@ -580,6 +581,7 @@ class CameraManager(object):
             (carla.Transform(
                 carla.Location(x=-1, y=-bound_y, z=0.5)), attachment.Rigid)]
         self.transform_index = 1
+        self.projection_matrix = np.identity(3)
         self.sensors = [
             ['sensor.camera.rgb', cc.Raw, 'Camera RGB'],
             ['sensor.camera.depth', cc.Raw, 'Camera Depth (Raw)'],
@@ -598,6 +600,21 @@ class CameraManager(object):
                 blp.set_attribute('image_size_y', str(hud.dim[1]))
                 if blp.has_attribute('gamma'):
                     blp.set_attribute('gamma', str(gamma_correction))
+                if 'rgb' in item[0]:
+                    # Build the K projection matrix:
+                    # K = [[Fx,  0, image_w/2],
+                    #      [ 0, Fy, image_h/2],
+                    #      [ 0,  0,         1]]
+                    image_w = blp.get_attribute("image_size_x").as_int()
+                    image_h = blp.get_attribute("image_size_y").as_int()
+                    fov = blp.get_attribute("fov").as_float()
+                    focal = image_w / (2.0 * np.tan(fov * np.pi / 360.0))
+
+                    # In this case Fx and Fy are the same since the pixel aspect
+                    # ratio is 1
+                    self.projection_matrix[0, 0] = self.projection_matrix[1, 1] = focal
+                    self.projection_matrix[0, 2] = image_w / 2.0
+                    self.projection_matrix[1, 2] = image_h / 2.0
             elif item[0].startswith('sensor.lidar'):
                 blp.set_attribute('range', '50')
             item.append(blp)
@@ -622,6 +639,7 @@ class CameraManager(object):
                 self._camera_transforms[self.transform_index][0],
                 attach_to=self._parent,
                 attachment_type=self._camera_transforms[self.transform_index][1])
+            self.sensor_transform = self._camera_transforms[self.transform_index][0]
 
             # We need to pass the lambda a weak reference to
             # self to avoid circular reference.
@@ -703,7 +721,7 @@ def game_loop(args):
             pygame.HWSURFACE | pygame.DOUBLEBUF)
 
         hud = HUD(args.width, args.height)
-        available_towns = [town_id for town_id in client.get_available_maps() if "Opt" not in town_id]
+        available_towns = [town_id for town_id in client.get_available_maps() if "Opt" not in town_id and "02" not in town_id]
         print("Available towns:", available_towns)
 
         while town_idx < len(available_towns):
@@ -711,7 +729,7 @@ def game_loop(args):
 
             world = World(client.load_world(available_towns[town_idx]), hud, args)
             controller = KeyboardControl(world)
-            lane_ext = LaneExtractor(world)
+            lane_extractor = LaneExtractor(world)
 
             if args.agent == "Roaming":
                 agent = RoamingAgent(world.player)
@@ -750,8 +768,8 @@ def game_loop(args):
                 if not world.world.wait_for_tick(10.0):
                     continue
                     
-                # Visualize lane markings
-                lane_ext.update()
+                # Extract lane markings
+                lane_extractor.update()
 
                 if args.agent == "Roaming" or args.agent == "Basic":
                     if controller.parse_events():
@@ -762,6 +780,7 @@ def game_loop(args):
 
                     world.tick(clock)
                     world.render(display)
+                    lane_extractor.visualize_lanes(display)
                     pygame.display.flip()
                     control = agent.run_step()
                     control.manual_gear_shift = False
@@ -771,6 +790,7 @@ def game_loop(args):
 
                     world.tick(clock)
                     world.render(display)
+                    lane_extractor.visualize_lanes(display)
                     pygame.display.flip()
 
                     # Set new destination when target has been reached
@@ -839,7 +859,7 @@ def main():
     argparser.add_argument(
         '--res',
         metavar='WIDTHxHEIGHT',
-        default='1280x720',
+        default='1640x590',
         help='Window resolution (default: 1280x720)')
     argparser.add_argument(
         '--filter',
