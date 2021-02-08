@@ -68,6 +68,11 @@ from agents.navigation.basic_agent import BasicAgent  # pylint: disable=import-e
 from lane_utils import LaneExtractor
 
 # ==============================================================================
+# -- Imports for npcs --------------------------------------------------------
+# ==============================================================================
+from spawn_npc import NPCManager
+
+# ==============================================================================
 # -- Global functions ----------------------------------------------------------
 # ==============================================================================
 
@@ -725,11 +730,14 @@ def game_loop(args):
         print("Available towns:", available_towns)
 
         while town_idx < len(available_towns):
-            print("Running", available_towns[town_idx])
+            print("\nRunning", available_towns[town_idx])
 
             world = World(client.load_world(available_towns[town_idx]), hud, args)
+            npc_manager = NPCManager(args)
             controller = KeyboardControl(world)
             lane_extractor = LaneExtractor(world)
+            
+            npc_manager.spawn_npc()
 
             if args.agent == "Roaming":
                 agent = RoamingAgent(world.player)
@@ -820,7 +828,8 @@ def game_loop(args):
                 if stopped_count >= 50:
                     print("Stopped for too long...")
                     break
-
+            
+            npc_manager.destory_npc()
             town_idx += 1
 
     finally:
@@ -837,6 +846,10 @@ def game_loop(args):
 
 def main():
     """Main method"""
+    
+    # ==============================================================================
+    # -- automatic_control args ------------------------------------------------------------
+    # ==============================================================================
 
     argparser = argparse.ArgumentParser(
         description='CARLA Automatic Control Client')
@@ -893,8 +906,58 @@ def main():
     argparser.add_argument(
         '-m', '--max_ticks',
         help='Set max number of ticks per map (default: 5000)',
-        default=5000,
+        default=500,
         type=int)
+        
+    # ==============================================================================
+    # -- spawn_npc args ------------------------------------------------------------
+    # ==============================================================================
+    
+    argparser.add_argument(
+        '-n', '--number-of-vehicles',
+        metavar='N',
+        default=30,
+        type=int,
+        help='number of vehicles (default: 30)')
+    argparser.add_argument(
+        '-w', '--number-of-walkers',
+        metavar='W',
+        default=30,
+        type=int,
+        help='number of walkers (default: 30)')
+    argparser.add_argument(
+        '--safe',
+        action='store_true',
+        help='avoid spawning vehicles prone to accidents')
+    argparser.add_argument(
+        '--filterv',
+        metavar='PATTERN',
+        default='vehicle.*',
+        help='vehicles filter (default: "vehicle.*")')
+    argparser.add_argument(
+        '--filterw',
+        metavar='PATTERN',
+        default='walker.pedestrian.*',
+        help='pedestrians filter (default: "walker.pedestrian.*")')
+    argparser.add_argument(
+        '--tm-port',
+        metavar='P',
+        default=8000,
+        type=int,
+        help='port to communicate with TM (default: 8000)')
+    argparser.add_argument(
+        '--sync',
+        action='store_true',
+        help='Synchronous mode execution')
+    argparser.add_argument(
+        '--hybrid',
+        action='store_true',
+        help='Enanble')
+    argparser.add_argument(
+        '--car-lights-on',
+        action='store_true',
+        default=False,
+        help='Enanble car lights')
 
     args = argparser.parse_args()
 
