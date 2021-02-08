@@ -20,7 +20,7 @@ class LaneExtractor(object):
         self.iteration_limit = 500
         self.max_lane_length = 100
         self.min_lane_points = 2
-        self.lane_min_y_diff = 5
+        self.lane_min_y_diff = 2
         self.world2vehicle = None
         self.vehicle2camera = np.array(world.camera_manager.sensor_transform.get_inverse_matrix())
         self.projection_matrix = world.camera_manager.projection_matrix
@@ -128,19 +128,18 @@ class LaneExtractor(object):
 
         return points_2d
         
-    def visualize_lanes(self, display):
-        if len(self.lanes) == 0:
-            return
-        
-        hue_step = 360 // len(self.lanes)
+    def visualize_lanes(self, display):        
+        hue_step = 360 // max(len(self.lanes), 1)
         hue = 0
         for lane in self.lanes:
             color = pygame.Color(0, 0, 0)
             color.hsla = (hue, 90 + np.random.rand() * 10, 50 + np.random.rand() * 10, 100)
             hue += hue_step
-            for point in lane:
-                pygame.draw.circle(display, color, point, 3)
-                
+            pygame.draw.circle(display, color, lane[0], 3)
+            for i in range(1, len(lane)):
+                pygame.draw.circle(display, color, lane[i], 3)
+                pygame.draw.line(display, color, lane[i-1], lane[i], 2)
+
     def filter_lane(self, lane):
         if len(lane) == 0:
             return lane
@@ -158,9 +157,15 @@ class LaneExtractor(object):
         for point in lane_points:
             lane_marking_type = point.left_lane_marking.type if side == side.LEFT else point.right_lane_marking.type
             lane_marking_color = point.left_lane_marking.color if side == side.LEFT else point.right_lane_marking.color
-            # self.world.debug.draw_point(point.transform.location, size=0.1, color=carla.Color(r=0, g=0, b=255), life_time=0.1)
+            
+            # check if waypoint is in juction
             if lane_marking_type == carla.libcarla.LaneMarkingType.NONE:
-                continue
+                if len(lane) == 0:
+                    # vehicle in juction, will provide lanes after the juction
+                    continue
+                else:
+                    # vehicle approaching juction, do not provide lanes after juction
+                    break 
             # Display forward vector
             forward_vector = point.transform.get_forward_vector()
             if (side == Side.LEFT and crossed) or (side == Side.RIGHT and not crossed):
