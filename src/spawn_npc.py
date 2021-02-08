@@ -70,12 +70,12 @@ class NPCManager(object):
         spawn_points = world.get_map().get_spawn_points()
         number_of_spawn_points = len(spawn_points)
 
-        if args.number_of_vehicles < number_of_spawn_points:
+        if args.num_npc_vehicles < number_of_spawn_points:
             random.shuffle(spawn_points)
-        elif args.number_of_vehicles > number_of_spawn_points:
+        elif args.num_npc_vehicles > number_of_spawn_points:
             msg = 'requested %d vehicles, but could only find %d spawn points'
-            logging.warning(msg, args.number_of_vehicles, number_of_spawn_points)
-            args.number_of_vehicles = number_of_spawn_points
+            logging.warning(msg, args.num_npc_vehicles, number_of_spawn_points)
+            args.num_npc_vehicles = number_of_spawn_points
 
         # @todo cannot import these directly.
         SpawnActor = carla.command.SpawnActor
@@ -88,7 +88,7 @@ class NPCManager(object):
         # --------------
         batch = []
         for n, transform in enumerate(spawn_points):
-            if n >= args.number_of_vehicles:
+            if n >= args.num_npc_vehicles:
                 break
             blueprint = random.choice(blueprints)
             if blueprint.has_attribute('color'):
@@ -123,7 +123,7 @@ class NPCManager(object):
         percentagePedestriansCrossing = 0.0     # how many pedestrians will walk through the road
         # 1. take all the random locations to spawn
         spawn_points = []
-        for i in range(args.number_of_walkers):
+        for i in range(args.num_npc_walkers):
             spawn_point = carla.Transform()
             loc = world.get_random_location_from_navigation()
             if (loc != None):

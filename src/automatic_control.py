@@ -914,17 +914,17 @@ def main():
     # ==============================================================================
     
     argparser.add_argument(
-        '-n', '--number-of-vehicles',
+        '-n', '--num_npc_vehicles',
         metavar='N',
         default=30,
         type=int,
-        help='number of vehicles (default: 30)')
+        help='number of NPC vehicles (default: 30)')
     argparser.add_argument(
-        '-w', '--number-of-walkers',
+        '-w', '--num_npc_walkers',
         metavar='W',
         default=30,
         type=int,
-        help='number of walkers (default: 30)')
+        help='number of NPC walkers (default: 30)')
     argparser.add_argument(
         '--safe',
         action='store_true',
@@ -940,7 +940,7 @@ def main():
         default='walker.pedestrian.*',
         help='pedestrians filter (default: "walker.pedestrian.*")')
     argparser.add_argument(
-        '--tm-port',
+        '--tm_port',
         metavar='P',
         default=8000,
         type=int,
@@ -954,7 +954,7 @@ def main():
         action='store_true',
         help='Enanble')
     argparser.add_argument(
-        '--car-lights-on',
+        '--car_lights_on',
         action='store_true',
         default=False,
         help='Enanble car lights')
