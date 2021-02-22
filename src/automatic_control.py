@@ -698,8 +698,8 @@ class CameraManager(object):
             self.surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
         
         if self.recording and self.save_image and image.frame % int(self.hud.server_fps) == 0:
-            folder_name = os.path.join(datetime.datetime.now().strftime("%d-%m-%Y"), self.hud.map_name)
-            image_path = folder_name +'/%08d.jpg' % self.frame_count
+            folder_name = datetime.datetime.now().strftime("%d-%m-%Y")
+            image_path = os.path.join(folder_name, self.hud.map_name + '_%06d.jpg' % self.frame_count)
             '''
             if not os.path.isdir(folder_name):
                 os.mkdir(folder_name)
