@@ -247,6 +247,7 @@ class HUD(object):
         self.server_fps = 0
         self.frame = 0
         self.simulation_time = 0
+        self.map_name = None
         self._show_info = True
         self._info_text = []
         self._server_clock = pygame.time.Clock()
@@ -261,6 +262,7 @@ class HUD(object):
     def tick(self, world, clock):
         """HUD method for every tick"""
         self._notifications.tick(world, clock)
+        self.map_name = world.map.name
         if not self._show_info:
             return
         transform = world.player.get_transform()
@@ -570,7 +572,8 @@ class CameraManager(object):
         self.surface = None
         self._parent = parent_actor
         self.hud = hud
-        self.recording = False
+        self.recording = True
+        self.save_image = False
         self.frame_count = 0
         bound_y = 0.5 + self._parent.bounding_box.extent.y
         attachment = carla.AttachmentType
@@ -693,13 +696,18 @@ class CameraManager(object):
             array = array[:, :, :3]
             array = array[:, :, ::-1]
             self.surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
-        if self.recording and image.frame % 50 == 0:
-            folder_name = datetime.datetime.now().strftime("%d-%m-%Y")
+        
+        if self.recording and self.save_image and image.frame % int(self.hud.server_fps) == 0:
+            folder_name = os.path.join(datetime.datetime.now().strftime("%d-%m-%Y"), self.hud.map_name)
+            image_path = folder_name +'/%08d.jpg' % self.frame_count
+            '''
             if not os.path.isdir(folder_name):
                 os.mkdir(folder_name)
-            image.save_to_disk(folder_name+'/%08d' % self.frame_count)
+            image.save_to_disk(image_path)
+            '''
             self.frame_count += 1
-            print("Saved image", self.frame_count)
+            self.hud.notification("Saved image: " + image_path)
+        self.save_image = False
 
 # ==============================================================================
 # -- Game Loop ---------------------------------------------------------
@@ -766,7 +774,6 @@ def game_loop(args):
             while ticks < args.max_ticks:
                 if ticks % 250 == 0:
                     world.next_weather()
-                    print("Changed weather")
                 ticks += 1
                 clock.tick_busy_loop(60)
                 if controller.parse_events():
@@ -825,7 +832,7 @@ def game_loop(args):
                 else:
                     stopped_count = 0
                 
-                if stopped_count >= 50:
+                if stopped_count >= 30:
                     print("Stopped for too long...")
                     break
             

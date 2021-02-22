@@ -14,10 +14,11 @@ class LaneExtractor(object):
         self.vehicle = world.player
         self.map = world.map
         self.world = world.world
+        self.camera = world.camera_manager
         self.waypoint = None
         self.lanes = []
         self.max_waypoint_dist = 50
-        self.iteration_limit = 500
+        self.max_adjacent_lanes = 2
         self.max_lane_length = 100
         self.min_lane_points = 2
         self.lane_min_y_diff = 2
@@ -31,11 +32,14 @@ class LaneExtractor(object):
         curr_waypoint = waypoint
         for i in range(int(self.max_waypoint_dist/abs(distance))):
             if distance > 0:
-                new_waypoint = curr_waypoint.next(distance)[0]
+                new_waypoint = curr_waypoint.next(distance)
             else:
-                new_waypoint = curr_waypoint.previous(abs(distance))[0]
-            lane.append(new_waypoint)
-            curr_waypoint = new_waypoint
+                new_waypoint = curr_waypoint.previous(abs(distance))
+            if new_waypoint:
+                lane.append(new_waypoint[0])
+                curr_waypoint = new_waypoint[0]
+            else:
+                break
         return lane
 
     def get_adjacent_lanes(self, side):
@@ -48,6 +52,8 @@ class LaneExtractor(object):
         lanes = []
         i = 0
         while (cur_waypoint is not None and cur_waypoint.lane_type == carla.LaneType.Driving):
+            if i >= self.max_adjacent_lanes:
+                break
             lane_dict = {'waypoint': cur_waypoint}
             if (side == Side.LEFT and prev_lane_change == carla.LaneChange.Right) or (side == Side.RIGHT and prev_lane_change == carla.LaneChange.Left) or prev_lane_change == carla.LaneChange.NONE:
                 crossed = True
@@ -59,10 +65,17 @@ class LaneExtractor(object):
             else:
                 cur_waypoint = cur_waypoint.get_left_lane()
             i += 1
-            if i > self.iteration_limit:
-                print("Loop iteration limit reached")
+                
+        while cur_waypoint is not None:
+            if i >= self.max_adjacent_lanes:
                 break
-
+            lanes.append({'waypoint': cur_waypoint, 'crossed': crossed})
+            if (side == Side.LEFT) or (side == Side.RIGHT):
+                cur_waypoint = cur_waypoint.get_right_lane()
+            else:
+                cur_waypoint = cur_waypoint.get_left_lane()
+            i += 1
+            
         # Extend lanes and get marking positions on correct side
         for lane_dict in lanes:
             # Extend each lane to a set distance away from the vehicle
@@ -131,7 +144,10 @@ class LaneExtractor(object):
     def visualize_lanes(self, display):        
         hue_step = 360 // max(len(self.lanes), 1)
         hue = 0
-        for lane in self.lanes:
+        lane_info = {}
+        for lane_dict in self.lanes:
+            lane = lane_dict['points']
+            lane_type = lane_dict['type']
             color = pygame.Color(0, 0, 0)
             color.hsla = (hue, 90 + np.random.rand() * 10, 50 + np.random.rand() * 10, 100)
             hue += hue_step
@@ -139,6 +155,11 @@ class LaneExtractor(object):
             for i in range(1, len(lane)):
                 pygame.draw.circle(display, color, lane[i], 3)
                 pygame.draw.line(display, color, lane[i-1], lane[i], 2)
+            if lane_type not in lane_info:
+                lane_info[lane_type] = 1
+            else:
+                lane_info[lane_type] += 1
+        print(lane_info)
 
     def filter_lane(self, lane):
         if len(lane) == 0:
@@ -165,6 +186,8 @@ class LaneExtractor(object):
                     continue
                 else:
                     # vehicle approaching juction, do not provide lanes after juction
+                    lane_marking_type = lane_points[0].left_lane_marking.type if side == side.LEFT else lane_points[0].right_lane_marking.type
+                    lane_marking_color = lane_points[0].left_lane_marking.color if side == side.LEFT else lane_points[0].right_lane_marking.color
                     break 
             # Display forward vector
             forward_vector = point.transform.get_forward_vector()
@@ -182,13 +205,13 @@ class LaneExtractor(object):
 
             start_point = point.transform.location
             end_point = start_point + new_vector
-            self.world.debug.draw_point(end_point, size=0.1, color=carla.Color(r=0, g=255, b=0, a=255), life_time=0.1)
+            # self.world.debug.draw_point(end_point, size=0.1, color=carla.Color(r=0, g=255, b=0, a=255), life_time=0.1)
             lane.append([end_point.x, end_point.y, end_point.z])
         
         camera_coord_lane = self.project_to_camera(lane)
         filtered_lane = self.filter_lane(camera_coord_lane)
         if len(filtered_lane) >= self.min_lane_points:
-            self.lanes.append(filtered_lane)
+            self.lanes.append({'points': filtered_lane, 'type': lane_marking_type.name, 'color': lane_marking_color.name})
 
     def update(self):
         self.lanes = []
@@ -206,4 +229,7 @@ class LaneExtractor(object):
         # position of the current lane
         self.get_marking_positions(ego_lane_points, False, Side.LEFT)
         self.get_marking_positions(ego_lane_points, False, Side.RIGHT)
+        
+        # Tell camera to save image
+        self.camera.save_image = not self.waypoint.is_junction
 
