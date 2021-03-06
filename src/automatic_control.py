@@ -120,8 +120,6 @@ class World(object):
         self._gamma = args.gamma
         self.restart(args)
         self.world.on_tick(hud.on_world_tick)
-        self.recording_enabled = False
-        self.recording_start = 0
 
     def restart(self, args):
         """Restart the world"""
@@ -572,8 +570,7 @@ class CameraManager(object):
         self.surface = None
         self._parent = parent_actor
         self.hud = hud
-        self.recording = True
-        self.save_image = False
+        self.latest_image = None
         self.frame_count = 0
         bound_y = 0.5 + self._parent.bounding_box.extent.y
         attachment = carla.AttachmentType
@@ -661,11 +658,6 @@ class CameraManager(object):
         """Get the next sensor"""
         self.set_sensor(self.index + 1)
 
-    def toggle_recording(self):
-        """Toggle recording on or off"""
-        self.recording = not self.recording
-        self.hud.notification('Recording %s' % ('On' if self.recording else 'Off'))
-
     def render(self, display):
         """Render method"""
         if self.surface is not None:
@@ -696,18 +688,21 @@ class CameraManager(object):
             array = array[:, :, :3]
             array = array[:, :, ::-1]
             self.surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
+            self.latest_image = image
         
-        if self.recording and self.save_image and image.frame % int(self.hud.server_fps) == 0:
-            folder_name = datetime.datetime.now().strftime("%d-%m-%Y")
-            image_path = os.path.join(folder_name, self.hud.map_name + '_%06d.jpg' % self.frame_count)
-            '''
-            if not os.path.isdir(folder_name):
-                os.mkdir(folder_name)
-            image.save_to_disk(image_path)
-            '''
-            self.frame_count += 1
-            self.hud.notification("Saved image: " + image_path)
-        self.save_image = False
+    def save_frame(self):
+        if self.latest_image is None:
+            return None
+            
+        folder_name = datetime.datetime.now().strftime("%d-%m-%Y")
+        image_path = os.path.join(folder_name, self.hud.map_name + '_%06d.jpg' % self.frame_count)
+        if not os.path.isdir(folder_name):
+            os.mkdir(folder_name)
+        self.latest_image.save_to_disk(image_path)
+        self.frame_count += 1
+        self.hud.notification("Saved image: " + image_path)
+        
+        return image_path
 
 # ==============================================================================
 # -- Game Loop ---------------------------------------------------------
@@ -879,7 +874,7 @@ def main():
     argparser.add_argument(
         '--res',
         metavar='WIDTHxHEIGHT',
-        default='1640x590',
+        default='1280x720',
         help='Window resolution (default: 1280x720)')
     argparser.add_argument(
         '--filter',

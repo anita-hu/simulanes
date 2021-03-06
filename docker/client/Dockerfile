@@ -11,7 +11,7 @@ RUN useradd -m carla
 WORKDIR /home/carla
 COPY --from=carlasim/carla:0.9.11 /home/carla/PythonAPI ./PythonAPI
 RUN python3.7 -m easy_install ./PythonAPI/carla/dist/carla*py3.7*.egg
-RUN python3.7 -m pip install pygame numpy networkx
+RUN python3.7 -m pip install pygame numpy networkx scipy
 
 USER carla
 WORKDIR /home/carla/PythonAPI/simulanes

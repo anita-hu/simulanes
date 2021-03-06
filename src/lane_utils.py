@@ -1,6 +1,9 @@
 import carla
 import numpy as np
 import pygame
+import json
+from scipy.interpolate import CubicSpline
+import lane_config
 from enum import Enum
 
 
@@ -23,9 +26,9 @@ class LaneExtractor(object):
         self.min_lane_points = 2
         self.lane_min_y_diff = 2
         self.world2vehicle = None
-        self.vehicle2camera = np.array(world.camera_manager.sensor_transform.get_inverse_matrix())
-        self.projection_matrix = world.camera_manager.projection_matrix
-        self.image_dim = world.camera_manager.hud.dim
+        self.vehicle2camera = np.array(self.camera.sensor_transform.get_inverse_matrix())
+        self.projection_matrix = self.camera.projection_matrix
+        self.image_dim = self.camera.hud.dim
     
     def get_lane_points(self, waypoint, distance):
         lane = []
@@ -144,37 +147,68 @@ class LaneExtractor(object):
     def visualize_lanes(self, display):        
         hue_step = 360 // max(len(self.lanes), 1)
         hue = 0
-        lane_info = {}
         for lane_dict in self.lanes:
-            lane = lane_dict['points']
-            lane_type = lane_dict['type']
+            lane_xs = lane_dict['xs']
+            lane_ys = lane_config.row_anchors
+            lane = np.stack([lane_xs, lane_ys], axis=1)
+            lane_type = lane_config.lane_classes[lane_dict['class']]
             color = pygame.Color(0, 0, 0)
             color.hsla = (hue, 90 + np.random.rand() * 10, 50 + np.random.rand() * 10, 100)
             hue += hue_step
             pygame.draw.circle(display, color, lane[0], 3)
             for i in range(1, len(lane)):
-                pygame.draw.circle(display, color, lane[i], 3)
-                pygame.draw.line(display, color, lane[i-1], lane[i], 2)
-            if lane_type not in lane_info:
-                lane_info[lane_type] = 1
-            else:
-                lane_info[lane_type] += 1
-        print(lane_info)
+                if lane_xs[i] != -2:
+                    pygame.draw.circle(display, color, lane[i], 3)
+                    if lane_xs[i-1] != -2:
+                        pygame.draw.line(display, color, lane[i-1], lane[i], 2)
 
-    def filter_lane(self, lane):
-        if len(lane) == 0:
-            return lane
+    def format_lane(self, lane, lane_type, lane_color):
+        lane_class = 0
+        
+        if len(lane) < 2:
+            return lane, lane_class
             
         filtered = [lane[0]]
         for point in lane[1:]:
             y_diff = filtered[-1][1] - point[1]
             if y_diff > self.lane_min_y_diff:
                 filtered.append(point)
+        
+        points = np.array(filtered)
+        points = points[points[:, 1].argsort()]
+        min_y, max_y = points[0][1], points[-1][1]
+        cs = CubicSpline(points[:, 1], points[:, 0])
+        ys = np.array(lane_config.row_anchors)
+        lane_xs = cs(ys).astype(int)
+        lane_xs[ys <= min_y] = -2
+        lane_xs[ys >= max_y] = -2
+        
+        if lane_type == carla.LaneMarkingType.Broken:
+            lane_class = 1
+        elif lane_type == carla.LaneMarkingType.Solid:
+            lane_class = 3
+        elif lane_type == carla.LaneMarkingType.BrokenBroken:
+            lane_class = 5
+        elif lane_type == carla.LaneMarkingType.SolidSolid:
+            lane_class = 7
+        elif lane_type == carla.LaneMarkingType.SolidBroken:
+            lane_class = 9
+        elif lane_type == carla.LaneMarkingType.BrokenSolid:
+            lane_class = 11
+        elif lane_type == carla.LaneMarkingType.BottsDots:
+            lane_class = 13
+        elif lane_type == carla.LaneMarkingType.Curb:
+            lane_class = 14
+        
+        if lane_color == carla.LaneMarkingColor.Yellow:
+            lane_class += 1
                 
-        return filtered
+        return lane_xs.tolist(), lane_class
 
     def get_marking_positions(self, lane_points, crossed, side):
         lane = []
+        lane_marking_type = carla.LaneMarkingType.NONE
+        lane_marking_color = carla.LaneMarkingColor.Standard
         for point in lane_points:
             lane_marking_type = point.left_lane_marking.type if side == side.LEFT else point.right_lane_marking.type
             lane_marking_color = point.left_lane_marking.color if side == side.LEFT else point.right_lane_marking.color
@@ -209,10 +243,22 @@ class LaneExtractor(object):
             lane.append([end_point.x, end_point.y, end_point.z])
         
         camera_coord_lane = self.project_to_camera(lane)
-        filtered_lane = self.filter_lane(camera_coord_lane)
-        if len(filtered_lane) >= self.min_lane_points:
-            self.lanes.append({'points': filtered_lane, 'type': lane_marking_type.name, 'color': lane_marking_color.name})
-
+        lane_xs, lane_class = self.format_lane(camera_coord_lane, lane_marking_type, lane_marking_color)
+        
+        if len(lane_xs) >= self.min_lane_points:
+            self.lanes.append({'xs': lane_xs, 'class': lane_class})
+            
+    def save_lanes(self, image_path):
+        label_dict = {'lanes': [], 'classes': []}
+        label_dict['h_sample'] = lane_config.row_anchors
+        
+        for lane_dict in self.lanes:
+            label_dict['lanes'].append(lane_dict['xs'])
+            label_dict['classes'].append(lane_dict['class'])
+         
+        with open(image_path.replace('jpg', 'json'), 'w') as label_file:
+            json.dump(label_dict, label_file)
+        
     def update(self):
         self.lanes = []
         self.world2vehicle = self.vehicle.get_transform().get_inverse_matrix()
@@ -230,6 +276,9 @@ class LaneExtractor(object):
         self.get_marking_positions(ego_lane_points, False, Side.LEFT)
         self.get_marking_positions(ego_lane_points, False, Side.RIGHT)
         
-        # Tell camera to save image
-        self.camera.save_image = not self.waypoint.is_junction
+        # Save image and lane data
+        if not self.waypoint.is_junction and self.camera.latest_image.frame % int(self.camera.hud.server_fps) == 0:
+            image_path = self.camera.save_frame()
+            if image_path is not None:
+                self.save_lanes(image_path)
 
