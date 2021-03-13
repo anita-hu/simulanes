@@ -173,7 +173,10 @@ class LaneExtractor(object):
             y_diff = filtered[-1][1] - point[1]
             if y_diff > self.lane_min_y_diff:
                 filtered.append(point)
-        
+
+        if len(filtered) < 2:
+            return [lane[0]], lane_class
+
         points = np.array(filtered)
         points = points[points[:, 1].argsort()]
         min_y, max_y = points[0][1], points[-1][1]
