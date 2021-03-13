@@ -173,15 +173,18 @@ class LaneExtractor(object):
             y_diff = filtered[-1][1] - point[1]
             if y_diff > self.lane_min_y_diff:
                 filtered.append(point)
-        
+
+        if len(filtered) < 2:
+            return [lane[0]], lane_class
+
         points = np.array(filtered)
         points = points[points[:, 1].argsort()]
         min_y, max_y = points[0][1], points[-1][1]
         cs = CubicSpline(points[:, 1], points[:, 0])
         ys = np.array(lane_config.row_anchors)
         lane_xs = cs(ys).astype(int)
-        lane_xs[ys <= min_y] = -2
-        lane_xs[ys >= max_y] = -2
+        lane_xs[ys < min_y] = -2
+        lane_xs[ys > max_y] = -2
         
         if lane_type == carla.LaneMarkingType.Broken:
             lane_class = 1

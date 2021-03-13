@@ -8,21 +8,25 @@ Then pull the carla docker image:
 ```
 docker pull carlasim/carla:0.9.11
 ```
-Build the container (downloads additional assets)
+Build the server image (downloads additional assets):
 ```
-bash docker/build_server.sh
+bash docker/server/build_server.sh
 ```
-Run container and start carla server:
+Run the server container:
 ```
-bash docker/run_server.sh
+bash docker/server/run_server.sh
 ```
 
 ### Carla client
-Build docker image
+Build the client image:
 ```
-bash docker/build_client.sh
+bash docker/client/build_client.sh
 ```
-Run script in client server
+Run the client container:
 ```
-bash docker/run_client.sh
+bash docker/client/run_client.sh
+```
+Run the Python script from within the client container:
+```
+python3.7 automatic_control.py
 ```
