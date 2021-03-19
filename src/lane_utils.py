@@ -18,6 +18,7 @@ class LaneExtractor(object):
         self.map = world.map
         self.world = world.world
         self.camera = world.camera_manager
+        self.segmentation = world.segmentation_manager
         self.waypoint = None
         self.lanes = []
         self.max_waypoint_dist = 50
@@ -25,6 +26,7 @@ class LaneExtractor(object):
         self.max_lane_length = 100
         self.min_lane_points = 2
         self.lane_min_y_diff = 2
+        self.lane_ver_threshold = 0.7
         self.world2vehicle = None
         self.vehicle2camera = np.array(self.camera.sensor_transform.get_inverse_matrix())
         self.projection_matrix = self.camera.projection_matrix
@@ -166,7 +168,7 @@ class LaneExtractor(object):
         lane_class = 0
         
         if len(lane) < 2:
-            return lane, lane_class
+            return lane, lane_class, None
             
         filtered = [lane[0]]
         for point in lane[1:]:
@@ -175,8 +177,9 @@ class LaneExtractor(object):
                 filtered.append(point)
 
         if len(filtered) < 2:
-            return [lane[0]], lane_class
+            return [lane[0]], lane_class, None
 
+        # Interpolate points to predefined anchors for labels
         points = np.array(filtered)
         points = points[points[:, 1].argsort()]
         min_y, max_y = points[0][1], points[-1][1]
@@ -185,7 +188,12 @@ class LaneExtractor(object):
         lane_xs = cs(ys).astype(int)
         lane_xs[ys < min_y] = -2
         lane_xs[ys > max_y] = -2
-        
+
+        # Interpolate points for lane verification
+        ys = np.arange(int(min_y), int(max_y)+1)
+        xs = cs(ys).astype(int)
+        verification_points = np.vstack((ys[np.newaxis, :], xs[np.newaxis, :]))
+
         if lane_type == carla.LaneMarkingType.Broken:
             lane_class = 1
         elif lane_type == carla.LaneMarkingType.Solid:
@@ -206,7 +214,7 @@ class LaneExtractor(object):
         if lane_color == carla.LaneMarkingColor.Yellow:
             lane_class += 1
                 
-        return lane_xs.tolist(), lane_class
+        return lane_xs.tolist(), lane_class, verification_points
 
     def get_marking_positions(self, lane_points, crossed, side):
         lane = []
@@ -246,10 +254,36 @@ class LaneExtractor(object):
             lane.append([end_point.x, end_point.y, end_point.z])
         
         camera_coord_lane = self.project_to_camera(lane)
-        lane_xs, lane_class = self.format_lane(camera_coord_lane, lane_marking_type, lane_marking_color)
+        lane_xs, lane_class, verification_points = self.format_lane(camera_coord_lane, lane_marking_type, lane_marking_color)
         
         if len(lane_xs) >= self.min_lane_points:
-            self.lanes.append({'xs': lane_xs, 'class': lane_class})
+            self.lanes.append({'xs': lane_xs, 'class': lane_class, 'ver_points': verification_points})
+
+    def verify_lanes(self):
+        """
+        Verifies position of all solid lanes acquired from the waypoints (sometimes the waypoints don't match
+        the lanes from the camera feed) by checking it against the segmentation mask.
+        """
+        # Get binary mask for road (128, 64, 128)
+        road_mask = np.all(self.segmentation.numpy_image == (128, 64, 128), axis=-1)
+
+        for lane in self.lanes:
+            # Only check solid lanes
+            if lane['class'] != 3:
+                continue
+
+            # Get mask values at each verification point
+            mask_vals = road_mask[lane['ver_points'][0], lane['ver_points'][1]]
+
+            # Get ratio of False points to total points
+            ratio = 1 - np.count_nonzero(mask_vals) / mask_vals.shape[0]
+
+            # Don't save this example if a lane is off
+            if ratio < self.lane_ver_threshold:
+                print(f"Lane found with ratio {ratio} < {self.lane_ver_threshold}. Skipping this frame.")
+                return False
+
+        return True
             
     def save_lanes(self, image_path):
         label_dict = {'lanes': [], 'classes': []}
@@ -278,10 +312,11 @@ class LaneExtractor(object):
         # position of the current lane
         self.get_marking_positions(ego_lane_points, False, Side.LEFT)
         self.get_marking_positions(ego_lane_points, False, Side.RIGHT)
-        
+
         # Save image and lane data
         if not self.waypoint.is_junction and self.camera.latest_image.frame % int(self.camera.hud.server_fps) == 0:
-            image_path = self.camera.save_frame()
-            if image_path is not None:
-                self.save_lanes(image_path)
-
+            # Check lanes against segmentation image to ensure they are valid
+            if self.verify_lanes():
+                image_path = self.camera.save_frame()
+                if image_path is not None:
+                    self.save_lanes(image_path)
