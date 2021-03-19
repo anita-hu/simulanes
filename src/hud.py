@@ -6,6 +6,8 @@ import numpy as np
 import pygame
 import carla
 
+import utils
+
 
 class HUD(object):
     """Class for HUD text"""
