@@ -6,6 +6,11 @@ from scipy.interpolate import CubicSpline
 import lane_config
 from enum import Enum
 
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from matplotlib.patches import Wedge
+from matplotlib.collections import PatchCollection
 
 class Side(Enum):
     LEFT = 0
@@ -27,75 +32,68 @@ class LaneExtractor(object):
         self.min_lane_points = 2
         self.lane_min_y_diff = 2
         self.lane_ver_threshold = 0.7
+        self.waypoint_dist = 2.0
+        self.max_waypoint_range = 5000.0 # in cm?
         self.world2vehicle = None
         self.vehicle2camera = np.array(self.camera.sensor_transform.get_inverse_matrix())
         self.projection_matrix = self.camera.projection_matrix
         self.image_dim = self.camera.hud.dim
-    
-    def get_lane_points(self, waypoint, distance):
-        lane = []
-        curr_waypoint = waypoint
-        for i in range(int(self.max_waypoint_dist/abs(distance))):
-            if distance > 0:
-                new_waypoint = curr_waypoint.next(distance)
-            else:
-                new_waypoint = curr_waypoint.previous(abs(distance))
-            if new_waypoint:
-                lane.append(new_waypoint[0])
-                curr_waypoint = new_waypoint[0]
-            else:
-                break
-        return lane
+        self.lane_marking_types = [
+            carla.LaneMarkingType.Broken,
+            carla.LaneMarkingType.Solid,
+            carla.LaneMarkingType.SolidSolid,
+            carla.LaneMarkingType.SolidBroken,
+            carla.LaneMarkingType.BrokenSolid,
+            carla.LaneMarkingType.BrokenBroken,
+            carla.LaneMarkingType.BottsDots,
+            carla.LaneMarkingType.Curb
+        ]
 
-    def get_adjacent_lanes(self, side):
-        if side == Side.LEFT:
-            cur_waypoint = self.waypoint.get_left_lane()
-        else:
-            cur_waypoint = self.waypoint.get_right_lane()
-        prev_lane_change = self.waypoint.lane_change
-        crossed = False
-        lanes = []
-        i = 0
-        while (cur_waypoint is not None and cur_waypoint.lane_type == carla.LaneType.Driving):
-            if i >= self.max_adjacent_lanes:
-                break
-            lane_dict = {'waypoint': cur_waypoint}
-            if (side == Side.LEFT and prev_lane_change == carla.LaneChange.Right) or (side == Side.RIGHT and prev_lane_change == carla.LaneChange.Left) or prev_lane_change == carla.LaneChange.NONE:
-                crossed = True
-            lane_dict['crossed'] = crossed
-            lanes.append(lane_dict)
-            prev_lane_change = cur_waypoint.lane_change 
-            if (side == Side.LEFT and crossed) or (side == Side.RIGHT and not crossed):
-                cur_waypoint = cur_waypoint.get_right_lane()
-            else:
-                cur_waypoint = cur_waypoint.get_left_lane()
-            i += 1
-                
-        while cur_waypoint is not None:
-            if i >= self.max_adjacent_lanes:
-                break
-            lanes.append({'waypoint': cur_waypoint, 'crossed': crossed})
-            if (side == Side.LEFT) or (side == Side.RIGHT):
-                cur_waypoint = cur_waypoint.get_right_lane()
-            else:
-                cur_waypoint = cur_waypoint.get_left_lane()
-            i += 1
-            
-        # Extend lanes and get marking positions on correct side
-        for lane_dict in lanes:
-            # Extend each lane to a set distance away from the vehicle
-            if lane_dict['crossed']:
-                lane_points = self.get_lane_points(lane_dict['waypoint'], -1.0)
-            else:
-                lane_points = self.get_lane_points(lane_dict['waypoint'], 1.0)
-            
-            self.get_marking_positions(lane_points, lane_dict['crossed'], side)
-            
+        # Get fov and position of camera
+        sensors = self.camera.sensors
+        rgb_cam_sensor = list(filter(lambda s: s[0] == 'sensor.camera.rgb', sensors))[0]
+        rgb_cam_bp = rgb_cam_sensor[-1]
+        self.rgb_cam_fov = rgb_cam_bp.get_attribute("fov").as_float()
+        self.rgb_cam_tf = self.camera.sensor_transform
+
+        # Get all waypoints in map
+        map_waypoints = self.map.generate_waypoints(self.waypoint_dist)
+        # print(self.map_waypoints[0].road_id) # 259
+        # print(self.map_waypoints[0].lane_id) # 7
+        self.waypoints_pos = [[], [], []]
+        self.waypoints_road_id = []
+        self.waypoints_lane_id = []
+        for wp in map_waypoints:
+            # Remove junction waypoints
+            if wp.is_junction:
+                continue
+            # Remove waypoints with irrelevant lane markings
+            if wp.right_lane_marking.type not in self.lane_marking_types and wp.left_lane_marking.type not in self.lane_marking_types:
+                continue
+            loc = wp.transform.location
+            self.waypoints_pos[0].append(loc.x)
+            self.waypoints_pos[1].append(loc.y)
+            self.waypoints_pos[2].append(loc.z)
+            self.waypoints_road_id.append(wp.road_id)
+            self.waypoints_lane_id.append(wp.lane_id)
+        self.waypoints_pos = np.array(self.waypoints_pos) # (3, N)
+        self.waypoints_road_id = np.array(self.waypoints_road_id) # (N,)
+        self.waypoints_lane_id = np.array(self.waypoints_lane_id) # (N,)
+        # plt.figure(figsize=(12, 8), dpi=400)
+        # plt.scatter(self.waypoints_pos[0], self.waypoints_pos[1], s=1, c=ids, cmap='gist_rainbow')
+        # plt.savefig("/home/carla/PythonAPI/simulanes/debug_plots/road_id_0_60.png")
+        # print("plot saved")
+
+        
+
     def project_to_camera(self, world_points):
-        if not world_points:
+        """
+        Project all world points to camera coordinates.
+
+        world_points: (3, N) numpy array of points
+        """
+        if world_points is None:
             return world_points
-        # Points in map coords of shape (3, num_points).
-        world_points = np.array(world_points).T
         
         # Add an extra 1.0 at the end of each 3d point so it becomes of
         # shape (4, num_points) and it can be multiplied by a (4, 4) matrix.
@@ -106,6 +104,9 @@ class LaneExtractor(object):
         
         # Transform the points from vehicle coords to camera coords.
         sensor_points = np.dot(self.vehicle2camera, vehicle_points)
+
+        # Get mask for all points within the max range threshold
+        points_in_range_mask = (sensor_points[0]**2 + sensor_points[1]**2 + sensor_points[2]**2 < self.max_waypoint_range)
         
         # New we change from camera coords to pixel coordinates
         # ^ z                       . z
@@ -140,29 +141,14 @@ class LaneExtractor(object):
             (points_2d[:, 0] > 0.0) & (points_2d[:, 0] < self.image_dim[0]) & \
             (points_2d[:, 1] > 0.0) & (points_2d[:, 1] < self.image_dim[1]) & \
             (points_2d[:, 2] > 0.0)
+
+        # Combine masks for points in canvas and points within max range
+        cam_points_in_range_mask = (points_in_canvas_mask) & (points_in_range_mask)
             
-        points_2d = points_2d[points_in_canvas_mask]
+        points_2d = points_2d[cam_points_in_range_mask]
         points_2d = points_2d[:, :2].astype(np.int)
 
-        return points_2d
-        
-    def visualize_lanes(self, display):        
-        hue_step = 360 // max(len(self.lanes), 1)
-        hue = 0
-        for lane_dict in self.lanes:
-            lane_xs = lane_dict['xs']
-            lane_ys = lane_config.row_anchors
-            lane = np.stack([lane_xs, lane_ys], axis=1)
-            lane_type = lane_config.lane_classes[lane_dict['class']]
-            color = pygame.Color(0, 0, 0)
-            color.hsla = (hue, 90 + np.random.rand() * 10, 50 + np.random.rand() * 10, 100)
-            hue += hue_step
-            pygame.draw.circle(display, color, lane[0], 3)
-            for i in range(1, len(lane)):
-                if lane_xs[i] != -2:
-                    pygame.draw.circle(display, color, lane[i], 3)
-                    if lane_xs[i-1] != -2:
-                        pygame.draw.line(display, color, lane[i-1], lane[i], 2)
+        return points_2d, cam_points_in_range_mask
 
     def format_lane(self, lane, lane_type, lane_color):
         lane_class = 0
@@ -295,28 +281,29 @@ class LaneExtractor(object):
          
         with open(image_path.replace('jpg', 'json'), 'w') as label_file:
             json.dump(label_dict, label_file)
+
+    def visualize_lanes(self, display):
+        unique_ids = np.unique(np.hstack((self.cam_road_ids[:, np.newaxis], self.cam_lane_ids[:, np.newaxis])), axis=0)
+        hues = np.linspace(0, 360, unique_ids.shape[0])[:, np.newaxis]
+        id_hues = {}
+        for i in range(unique_ids.shape[0]):
+            id_hues[tuple(unique_ids[i])] = hues[i]
         
+        for n in range(self.cam_pts.shape[0]):
+            ID = (self.cam_road_ids[n], self.cam_lane_ids[n])
+            hue = id_hues[ID]
+
+            color = pygame.Color(0, 0, 0)
+            color.hsla = (hue, 95, 55, 100)
+
+            pygame.draw.circle(display, color, list(self.cam_pts[n]), 3)
+
+
     def update(self):
-        self.lanes = []
-        self.world2vehicle = self.vehicle.get_transform().get_inverse_matrix()
-        
-        ego_location = self.vehicle.get_location()
-        self.waypoint = self.map.get_waypoint(ego_location, project_to_road=True)
+        # Convert all points to camera coords and remove ones outside of camera view
+        self.world2vehicle = np.array(self.vehicle.get_transform().get_inverse_matrix())
+        self.cam_pts, cam_pts_mask = self.project_to_camera(self.waypoints_pos)
 
-        self.get_adjacent_lanes(Side.LEFT)
-        self.get_adjacent_lanes(Side.RIGHT)
-
-        # Extend ego lane and get marking positions on both sides
-        ego_lane_points = self.get_lane_points(self.waypoint, 1.0)
-        
-        # position of the current lane
-        self.get_marking_positions(ego_lane_points, False, Side.LEFT)
-        self.get_marking_positions(ego_lane_points, False, Side.RIGHT)
-
-        # Save image and lane data
-        if not self.waypoint.is_junction and self.camera.latest_image.frame % int(self.camera.hud.server_fps) == 0:
-            # Check lanes against segmentation image to ensure they are valid
-            if self.verify_lanes():
-                image_path = self.camera.save_frame()
-                if image_path is not None:
-                    self.save_lanes(image_path)
+        # Get road and lane IDs for all camera points
+        self.cam_road_ids = self.waypoints_road_id[cam_pts_mask] # (M,)
+        self.cam_lane_ids = self.waypoints_lane_id[cam_pts_mask] # (M,)    
