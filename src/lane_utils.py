@@ -147,16 +147,14 @@ class LaneExtractor(object):
         return points_2d
         
     def visualize_lanes(self, display):        
-        hue_step = 360 // max(len(self.lanes), 1)
-        hue = 0
+        hue_step = 360 // len(lane_config.lane_classes)
         for lane_dict in self.lanes:
             lane_xs = lane_dict['xs']
             lane_ys = lane_config.row_anchors
             lane = np.stack([lane_xs, lane_ys], axis=1)
             lane_type = lane_config.lane_classes[lane_dict['class']]
             color = pygame.Color(0, 0, 0)
-            color.hsla = (hue, 90 + np.random.rand() * 10, 50 + np.random.rand() * 10, 100)
-            hue += hue_step
+            color.hsla = (hue_step*lane_dict['class'], 100, 50, 50)
             pygame.draw.circle(display, color, lane[0], 3)
             for i in range(1, len(lane)):
                 if lane_xs[i] != -2:
@@ -218,30 +216,34 @@ class LaneExtractor(object):
 
     def get_marking_positions(self, lane_points, crossed, side):
         lane = []
-        lane_marking_type = carla.LaneMarkingType.NONE
-        lane_marking_color = carla.LaneMarkingColor.Standard
+        prev_lane_marking_type = lane_marking_type = carla.LaneMarkingType.NONE
+        prev_lane_marking_color = lane_marking_color = carla.LaneMarkingColor.Standard
         for point in lane_points:
-            lane_marking_type = point.left_lane_marking.type if side == side.LEFT else point.right_lane_marking.type
-            lane_marking_color = point.left_lane_marking.color if side == side.LEFT else point.right_lane_marking.color
-            
+            # Display forward vector
+            forward_vector = point.transform.get_forward_vector()
+            prev_lane_marking_type = lane_marking_type
+            prev_lane_marking_color = lane_marking_color
+            if (side == Side.LEFT and crossed) or (side == Side.RIGHT and not crossed):
+                # Rotate 90 deg CCW
+                rotated_vector = carla.Vector3D(-forward_vector.y, forward_vector.x, 0)
+                lane_marking_type = point.right_lane_marking.type
+                lane_marking_color = point.right_lane_marking.color
+            else:
+                # Rotate 90 deg CW
+                rotated_vector = carla.Vector3D(forward_vector.y, -forward_vector.x, 0)
+                lane_marking_type = point.left_lane_marking.type
+                lane_marking_color = point.left_lane_marking.color
+                
             # check if waypoint is in juction
-            if lane_marking_type == carla.libcarla.LaneMarkingType.NONE:
+            if lane_marking_type == carla.LaneMarkingType.NONE:
                 if len(lane) == 0:
                     # vehicle in juction, will provide lanes after the juction
                     continue
                 else:
                     # vehicle approaching juction, do not provide lanes after juction
-                    lane_marking_type = lane_points[0].left_lane_marking.type if side == side.LEFT else lane_points[0].right_lane_marking.type
-                    lane_marking_color = lane_points[0].left_lane_marking.color if side == side.LEFT else lane_points[0].right_lane_marking.color
-                    break 
-            # Display forward vector
-            forward_vector = point.transform.get_forward_vector()
-            if (side == Side.LEFT and crossed) or (side == Side.RIGHT and not crossed):
-                # Rotate 90 deg CCW
-                rotated_vector = carla.Vector3D(-forward_vector.y, forward_vector.x, 0)
-            else:
-                # Rotate 90 deg CW
-                rotated_vector = carla.Vector3D(forward_vector.y, -forward_vector.x, 0)
+                    lane_marking_type = prev_lane_marking_type
+                    lane_marking_color = prev_lane_marking_color
+                    break
             
             # Scale rotated vector to have a length equal to lane width / 2
             angle = np.arctan2(rotated_vector.y, rotated_vector.x)
@@ -320,3 +322,4 @@ class LaneExtractor(object):
                 image_path = self.camera.save_frame()
                 if image_path is not None:
                     self.save_lanes(image_path)
+
