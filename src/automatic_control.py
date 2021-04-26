@@ -50,7 +50,7 @@ from agents.navigation.behavior_agent import BehaviorAgent  # pylint: disable=im
 from agents.navigation.roaming_agent import RoamingAgent  # pylint: disable=import-error
 from agents.navigation.basic_agent import BasicAgent  # pylint: disable=import-error
 
-import utils
+from utils import find_weather_presets, get_actor_display_name
 from sensors import CollisionSensor, LaneInvasionSensor, GnssSensor, CameraManager
 from lane_utils import LaneExtractor
 from spawn_npc import NPCManager
@@ -77,7 +77,7 @@ class World(object):
         self.gnss_sensor = None
         self.camera_manager = None
         self.segmentation_manager = None
-        self._weather_presets = utils.find_weather_presets()
+        self._weather_presets = find_weather_presets()
         self._weather_index = 0
         self._actor_filter = args.filter
         self._gamma = args.gamma
@@ -129,7 +129,7 @@ class World(object):
         self.segmentation_manager = CameraManager(self.player, self.hud, self._gamma)
         self.segmentation_manager.transform_index = seg_pos_id
         self.segmentation_manager.set_sensor(seg_index, notify=False)
-        actor_type = utils.get_actor_display_name(self.player)
+        actor_type = get_actor_display_name(self.player)
         self.hud.notification(actor_type)
 
     def next_weather(self, reverse=False):
@@ -388,15 +388,15 @@ def main():
     argparser.add_argument(
         '-n', '--num_npc_vehicles',
         metavar='N',
-        default=30,
+        default=20,
         type=int,
-        help='number of NPC vehicles (default: 30)')
+        help='number of NPC vehicles (default: 20)')
     argparser.add_argument(
         '-w', '--num_npc_walkers',
         metavar='W',
-        default=30,
+        default=10,
         type=int,
-        help='number of NPC walkers (default: 30)')
+        help='number of NPC walkers (default: 10)')
     argparser.add_argument(
         '--safe',
         action='store_true',

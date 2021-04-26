@@ -26,7 +26,7 @@ class LaneExtractor(object):
         self.max_lane_length = 100
         self.min_lane_points = 2
         self.lane_min_y_diff = 2
-        self.lane_ver_threshold = 0.7
+        self.save_image = True
         self.world2vehicle = None
         self.vehicle2camera = np.array(self.camera.sensor_transform.get_inverse_matrix())
         self.projection_matrix = self.camera.projection_matrix
@@ -260,33 +260,30 @@ class LaneExtractor(object):
         
         if len(lane_xs) >= self.min_lane_points:
             self.lanes.append({'xs': lane_xs, 'class': lane_class, 'ver_points': verification_points})
-
-    def verify_lanes(self):
-        """
-        Verifies position of all solid lanes acquired from the waypoints (sometimes the waypoints don't match
-        the lanes from the camera feed) by checking it against the segmentation mask.
-        """
-        # Get binary mask for road (128, 64, 128)
+        
+    def remove_occluded_lanes(self):
+        # Get binary mask for road (128, 64, 128), lane (157, 234, 50), sidewalk (244, 35, 232)
         road_mask = np.all(self.segmentation.numpy_image == (128, 64, 128), axis=-1)
+        lane_mask = np.all(self.segmentation.numpy_image == (157, 234, 50), axis=-1)
+        sidewalk_mask = np.all(self.segmentation.numpy_image == (244, 35, 232), axis=-1)
+        combined_mask = road_mask | lane_mask | sidewalk_mask
+        
+        non_occluded_lanes = []
+        occluded = 0
 
         for lane in self.lanes:
-            # Only check solid lanes
-            if lane['class'] != 3:
-                continue
+            mask_vals = combined_mask[lane['ver_points'][0], lane['ver_points'][1]]
+            occlusion = 1 - np.count_nonzero(mask_vals) / mask_vals.shape[0]
 
-            # Get mask values at each verification point
-            mask_vals = road_mask[lane['ver_points'][0], lane['ver_points'][1]]
+            if occlusion > 0.9:
+                occluded += 1
+            else:
+                non_occluded_lanes.append(lane)
 
-            # Get ratio of False points to total points
-            ratio = 1 - np.count_nonzero(mask_vals) / mask_vals.shape[0]
+        if occluded > 1:
+            self.lanes = non_occluded_lanes
+            print(f"Found {occluded} occluded lanes")
 
-            # Don't save this example if a lane is off
-            if ratio < self.lane_ver_threshold:
-                print(f"Lane found with ratio {ratio} < {self.lane_ver_threshold}. Skipping this frame.")
-                return False
-
-        return True
-            
     def save_lanes(self, image_path):
         label_dict = {'lanes': [], 'classes': []}
         label_dict['h_sample'] = lane_config.row_anchors
@@ -311,15 +308,19 @@ class LaneExtractor(object):
         # Extend ego lane and get marking positions on both sides
         ego_lane_points = self.get_lane_points(self.waypoint, 1.0)
         
-        # position of the current lane
+        # Position of the current lane
         self.get_marking_positions(ego_lane_points, False, Side.LEFT)
         self.get_marking_positions(ego_lane_points, False, Side.RIGHT)
+        
+        # Remove fully occluded lanes
+        self.remove_occluded_lanes()
+        
+        if not self.save_image:
+            return
 
         # Save image and lane data
         if not self.waypoint.is_junction and self.camera.latest_image.frame % int(self.camera.hud.server_fps) == 0:
-            # Check lanes against segmentation image to ensure they are valid
-            if self.verify_lanes():
-                image_path = self.camera.save_frame()
-                if image_path is not None:
-                    self.save_lanes(image_path)
+            image_path = self.camera.save_frame()
+            if image_path is not None:
+                self.save_lanes(image_path)
 
