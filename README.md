@@ -30,3 +30,7 @@ Run the Python script from within the client container:
 ```
 python3.7 automatic_control.py
 ```
+For manual control, run this Python script instead:
+```
+python3.7 manual_control.py [-t TOWN]
+```

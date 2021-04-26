@@ -280,7 +280,7 @@ class LaneExtractor(object):
             else:
                 non_occluded_lanes.append(lane)
 
-        if occluded > 1:
+        if occluded > 0:
             self.lanes = non_occluded_lanes
             print(f"Found {occluded} occluded lanes")
 
