@@ -494,7 +494,7 @@ class KeyboardControl(object):
 
     def _parse_vehicle_keys(self, keys, milliseconds):
         if keys[K_UP] or keys[K_w]:
-            self._control.throttle = min(self._control.throttle + 0.01, 1)
+            self._control.throttle = min(self._control.throttle + 0.02, 1)
         else:
             self._control.throttle = 0.0
 
@@ -629,12 +629,12 @@ def main():
         '--res',
         metavar='WIDTHxHEIGHT',
         default='1280x720',
-        help='window resolution (default: 1280x720)')
+        help='Window resolution (default: 1280x720)')
     argparser.add_argument(
         '--filter',
         metavar='PATTERN',
-        default='vehicle.*',
-        help='actor filter (default: "vehicle.*")')
+        default='vehicle.tesla.model3', # use 'vehicle.*' for random vehicle
+        help='Actor filter (default: "vehicle.tesla.model3")')
     argparser.add_argument(
         '--rolename',
         metavar='NAME',

@@ -57,6 +57,8 @@ class HUD(object):
         max_col = max(1.0, max(collision))
         collision = [x / max_col for x in collision]
         vehicles = world.world.get_actors().filter('vehicle.*')
+        ego_location = world.player.get_location()
+        waypoint = world.map.get_waypoint(ego_location, project_to_road=True)
         
         # always make traffic lights
         if world.player.is_at_traffic_light():
@@ -71,6 +73,7 @@ class HUD(object):
             '',
             'Vehicle: % 20s' % utils.get_actor_display_name(world.player, truncate=20),
             'Map:     % 20s' % world.map.name,
+            'Road id: % 20s' % waypoint.road_id,
             'Simulation time: % 12s' % datetime.timedelta(seconds=int(self.simulation_time)),
             '',
             'Speed:   % 15.0f km/h' % (3.6 * math.sqrt(vel.x**2 + vel.y**2 + vel.z**2)),
@@ -128,7 +131,7 @@ class HUD(object):
     def render(self, display):
         """Render for HUD class"""
         if self._show_info:
-            info_surface = pygame.Surface((220, self.dim[1]))
+            info_surface = pygame.Surface((250, self.dim[1]))
             info_surface.set_alpha(100)
             display.blit(info_surface, (0, 0))
             v_offset = 4
