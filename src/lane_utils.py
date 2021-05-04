@@ -21,9 +21,11 @@ class LaneExtractor(object):
         self.segmentation = world.segmentation_manager
         self.waypoint = None
         self.lanes = []
+        # distance in meters of the farthest waypoint from the car
         self.max_waypoint_dist = 50
-        self.max_adjacent_lanes = 2
-        self.max_lane_length = 100
+        # maximum number of lane lines on each side of the car
+        # this does not include the lane lines of the lane the car is in
+        self.max_adjacent_lanes = 1
         self.min_lane_points = 2
         self.lane_min_y_diff = 2
         self.save_image = True
@@ -55,10 +57,8 @@ class LaneExtractor(object):
         prev_lane_change = self.waypoint.lane_change
         crossed = False
         lanes = []
-        i = 0
+        
         while (cur_waypoint is not None and cur_waypoint.lane_type == carla.LaneType.Driving):
-            if i >= self.max_adjacent_lanes:
-                break
             lane_dict = {'waypoint': cur_waypoint}
             if (side == Side.LEFT and prev_lane_change == carla.LaneChange.Right) or (side == Side.RIGHT and prev_lane_change == carla.LaneChange.Left) or prev_lane_change == carla.LaneChange.NONE:
                 crossed = True
@@ -69,27 +69,28 @@ class LaneExtractor(object):
                 cur_waypoint = cur_waypoint.get_right_lane()
             else:
                 cur_waypoint = cur_waypoint.get_left_lane()
-            i += 1
                 
         while cur_waypoint is not None:
-            if i >= self.max_adjacent_lanes:
-                break
             lanes.append({'waypoint': cur_waypoint, 'crossed': crossed})
             if (side == Side.LEFT) or (side == Side.RIGHT):
                 cur_waypoint = cur_waypoint.get_right_lane()
             else:
                 cur_waypoint = cur_waypoint.get_left_lane()
-            i += 1
             
         # Extend lanes and get marking positions on correct side
+        i = 0
         for lane_dict in lanes:
+            if i >= self.max_adjacent_lanes:
+                break
             # Extend each lane to a set distance away from the vehicle
             if lane_dict['crossed']:
                 lane_points = self.get_lane_points(lane_dict['waypoint'], -1.0)
             else:
                 lane_points = self.get_lane_points(lane_dict['waypoint'], 1.0)
             
-            self.get_marking_positions(lane_points, lane_dict['crossed'], side)
+            lane_added = self.get_marking_positions(lane_points, lane_dict['crossed'], side)
+            if lane_added:
+                i += 1
             
     def project_to_camera(self, world_points):
         if not world_points:
@@ -260,13 +261,17 @@ class LaneExtractor(object):
         
         if len(lane_xs) >= self.min_lane_points:
             self.lanes.append({'xs': lane_xs, 'class': lane_class, 'ver_points': verification_points})
+            return True
+            
+        return False
         
     def remove_occluded_lanes(self):
-        # Get binary mask for road (128, 64, 128), lane (157, 234, 50), sidewalk (244, 35, 232)
+        # Get binary mask for road (128, 64, 128), lane (157, 234, 50), sidewalk (244, 35, 232), vehicles (0, 0, 142)
         road_mask = np.all(self.segmentation.numpy_image == (128, 64, 128), axis=-1)
         lane_mask = np.all(self.segmentation.numpy_image == (157, 234, 50), axis=-1)
         sidewalk_mask = np.all(self.segmentation.numpy_image == (244, 35, 232), axis=-1)
-        combined_mask = road_mask | lane_mask | sidewalk_mask
+        vehicle_mask = np.all(self.segmentation.numpy_image == (0, 0, 142), axis=-1)
+        combined_mask = road_mask | lane_mask | sidewalk_mask | vehicle_mask
         
         non_occluded_lanes = []
         occluded = 0
