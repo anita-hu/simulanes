@@ -159,6 +159,7 @@ class World(object):
             print('  The server could not send the OpenDRIVE (.xodr) file:')
             print('  Make sure it exists, has the same name of your town, and is correct.')
             sys.exit(1)
+        self.spawn_point = args.spawn_point
         self.hud = hud
         self.player = None
         self.collision_sensor = None
@@ -226,15 +227,23 @@ class World(object):
             self.destroy()
             self.player = self.world.try_spawn_actor(blueprint, spawn_point)
             self.modify_vehicle_physics(self.player)
-        while self.player is None:
-            if not self.map.get_spawn_points():
-                print('There are no spawn points available in your map/town.')
-                print('Please add some Vehicle Spawn Point to your UE4 scene.')
-                sys.exit(1)
-            spawn_points = self.map.get_spawn_points()
-            spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
+        # Spawn car at custom spawn location, if given
+        if self.spawn_point is not None and self.player is None:
+            spawn_loc = carla.Location(self.spawn_point[0], self.spawn_point[1], self.spawn_point[2])
+            spawn_rot = carla.Rotation(self.spawn_point[3], self.spawn_point[4], self.spawn_point[5])
+            spawn_point = carla.Transform(spawn_loc, spawn_rot)
             self.player = self.world.try_spawn_actor(blueprint, spawn_point)
             self.modify_vehicle_physics(self.player)
+        else:
+            while self.player is None:
+                if not self.map.get_spawn_points():
+                    print('There are no spawn points available in your map/town.')
+                    print('Please add some Vehicle Spawn Point to your UE4 scene.')
+                    sys.exit(1)
+                spawn_points = self.map.get_spawn_points()
+                spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
+                self.player = self.world.try_spawn_actor(blueprint, spawn_point)
+                self.modify_vehicle_physics(self.player)
         # Set up the sensors.
         self.collision_sensor = CollisionSensor(self.player, self.hud)
         self.lane_invasion_sensor = LaneInvasionSensor(self.player, self.hud)
@@ -567,7 +576,7 @@ def game_loop(args):
         print("Loading", args.town)
         world = World(client.load_world(args.town), hud, args)
         controller = KeyboardControl(world, args.autopilot)
-        lane_extractor = LaneExtractor(world)
+        lane_extractor = LaneExtractor(world, args.generate_wp_map)
         lane_extractor.save_image = False
 
         clock = pygame.time.Clock()
@@ -645,6 +654,15 @@ def main():
         default=2.2,
         type=float,
         help='Gamma correction of the camera (default: 2.2)')
+    argparser.add_argument(
+        '--spawn_point',
+        nargs=6,
+        type=float,
+        help='Spawn transform for the car in Carla coordinates: (x, y, z, pitch, yaw, roll)')
+    argparser.add_argument(
+        '-m', '--generate_wp_map',
+        action='store_true',
+        help='Display a plot of all the waypoints in the map')
     args = argparser.parse_args()
 
     args.width, args.height = [int(x) for x in args.res.split('x')]
