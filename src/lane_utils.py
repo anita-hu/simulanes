@@ -53,6 +53,7 @@ class LaneExtractor(object):
             map_waypoints = self.map.generate_waypoints(1.0)
             waypoints_pos = [[], []]
             waypoints_id = []
+            annotation = {}
             for wp in map_waypoints:
                 # Remove junction waypoints
                 if wp.is_junction:
@@ -64,6 +65,10 @@ class LaneExtractor(object):
                 waypoints_pos[0].append(loc.x)
                 waypoints_pos[1].append(loc.y)
                 waypoints_id.append(wp.road_id) # Can change this to lane_id if needed
+                if wp.road_id not in annotation:
+                    annotation[wp.road_id] = [(loc.x, loc.y)]
+                else:
+                    annotation[wp.road_id].append((loc.x, loc.y))
             
             # Create debug plots folder if it doesn't exist
             os.makedirs(self.debug_plot_path, exist_ok=True)
@@ -71,6 +76,12 @@ class LaneExtractor(object):
             # Plot all waypoints
             plt.figure(figsize=(12, 8), dpi=400)
             plt.scatter(waypoints_pos[0], waypoints_pos[1], s=1, c=waypoints_id, cmap='gist_rainbow')
+            
+            # Annotate road ids
+            for road_id, locations in annotation.items():
+                x, y = locations[len(locations)//2]
+                plt.text(x, y, road_id)
+                
             plt.savefig(os.path.join(self.debug_plot_path, self.map.name + "_road_IDs.png"))
             print("Debug plot saved")
     
