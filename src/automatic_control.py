@@ -198,7 +198,6 @@ def game_loop(args):
     world = None
     tot_target_reached = 0
     num_min_waypoints = 21
-    available_towns = []
     town_idx = 0
 
     try:

@@ -16,7 +16,7 @@ class Side(Enum):
     BOTH = 2
 
 
-class LaneExtractor(object):
+class LaneExtractor:
     def __init__(self, world, generate_wp_map=False):
         self.vehicle = world.player
         self.map = world.map
@@ -351,6 +351,9 @@ class LaneExtractor(object):
             json.dump(label_dict, label_file)
 
     def check_lanes_correct(self):
+        if map_info.is_bad_road_id(self.map.name, self.waypoint.road_id):
+            print("Bad road id, skipping frame")
+            return False
         gt_lane_count = map_info.get_gt_lane_count(self.map.name, self.waypoint.road_id)
         if len(self.lanes) < min(self.max_lanes, gt_lane_count):
             print(f"Found {len(self.lanes)} lanes but GT is {min(self.max_lanes, gt_lane_count)}, skipping frame")
@@ -376,11 +379,11 @@ class LaneExtractor(object):
         self.get_marking_positions(ego_lane_points, False, Side.RIGHT)
 
         # Do not save image and labels
-        if not self.save_image or self.waypoint.is_junction or not self.check_lanes_correct():
+        if self.waypoint.is_junction or not self.check_lanes_correct():
             return
 
         # Save image and lane data
-        if self.camera.latest_image.frame % int(self.camera.hud.server_fps) == 0:
+        if self.save_image and self.camera.latest_image.frame % int(self.camera.hud.server_fps) == 0:
             image_path = self.camera.save_frame()
             if image_path is not None:
                 self.write_lanes(image_path)

@@ -11,6 +11,9 @@ Lane labels are saved in the TuSimple format.
 `lane_config.py` specifies the row anchors used which can be changed to follow the CULane format.
 
 ### Map info
-`map_info.py` contains the max number of lanes (including curbs) expected for each road id.
+`map_info.py` contains the following info for most available towns
+1. the max number of lanes (including curbs) expected for each road id
+2. bad road ids where there are unfixable issues with the lane labels
+
 This info is used to ensure the labels saved have no error. 
 If a town is not in map info, it will not be used for data collection.
