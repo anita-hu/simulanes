@@ -2,7 +2,9 @@ import carla
 import numpy as np
 import pygame
 import json
+import os
 from scipy.interpolate import CubicSpline
+from matplotlib import pyplot as plt
 import lane_config
 from enum import Enum
 
@@ -13,12 +15,13 @@ class Side(Enum):
     BOTH = 2
 
 class LaneExtractor(object):
-    def __init__(self, world):
+    def __init__(self, world, generate_wp_map=False):
         self.vehicle = world.player
         self.map = world.map
         self.world = world.world
         self.camera = world.camera_manager
         self.segmentation = world.segmentation_manager
+        self.debug_plot_path = "/home/carla/PythonAPI/simulanes/debug_plots"
         self.waypoint = None
         self.lanes = []
         # distance in meters of the farthest waypoint from the car
@@ -33,6 +36,43 @@ class LaneExtractor(object):
         self.vehicle2camera = np.array(self.camera.sensor_transform.get_inverse_matrix())
         self.projection_matrix = self.camera.projection_matrix
         self.image_dim = self.camera.hud.dim
+
+        if generate_wp_map:
+            lane_marking_types = [
+                carla.LaneMarkingType.Broken,
+                carla.LaneMarkingType.Solid,
+                carla.LaneMarkingType.SolidSolid,
+                carla.LaneMarkingType.SolidBroken,
+                carla.LaneMarkingType.BrokenSolid,
+                carla.LaneMarkingType.BrokenBroken,
+                carla.LaneMarkingType.BottsDots,
+                carla.LaneMarkingType.Curb
+            ]
+
+            # Get all waypoints in map
+            map_waypoints = self.map.generate_waypoints(1.0)
+            waypoints_pos = [[], []]
+            waypoints_id = []
+            for wp in map_waypoints:
+                # Remove junction waypoints
+                if wp.is_junction:
+                    continue
+                # Remove waypoints with irrelevant lane markings
+                if wp.right_lane_marking.type not in lane_marking_types and wp.left_lane_marking.type not in lane_marking_types:
+                    continue
+                loc = wp.transform.location
+                waypoints_pos[0].append(loc.x)
+                waypoints_pos[1].append(loc.y)
+                waypoints_id.append(wp.road_id) # Can change this to lane_id if needed
+            
+            # Create debug plots folder if it doesn't exist
+            os.makedirs(self.debug_plot_path, exist_ok=True)
+
+            # Plot all waypoints
+            plt.figure(figsize=(12, 8), dpi=400)
+            plt.scatter(waypoints_pos[0], waypoints_pos[1], s=1, c=waypoints_id, cmap='gist_rainbow')
+            plt.savefig(os.path.join(self.debug_plot_path, self.map.name + "_road_IDs.png"))
+            print("Debug plot saved")
     
     def get_lane_points(self, waypoint, distance):
         lane = []
