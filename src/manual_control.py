@@ -53,7 +53,6 @@ Use ARROWS or WASD keys for control.
 
 from __future__ import print_function
 
-
 # ==============================================================================
 # -- find carla module ---------------------------------------------------------
 # ==============================================================================
@@ -70,7 +69,6 @@ try:
         'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
 except IndexError:
     pass
-
 
 # ==============================================================================
 # -- imports -------------------------------------------------------------------
@@ -332,6 +330,7 @@ class World(object):
 
 class KeyboardControl(object):
     """Class that handles keyboard input."""
+
     def __init__(self, world, start_in_autopilot):
         self._autopilot_enabled = start_in_autopilot
         if isinstance(world.player, carla.Vehicle):
@@ -488,13 +487,13 @@ class KeyboardControl(object):
                 # Set automatic control-related vehicle lights
                 if self._control.brake:
                     current_lights |= carla.VehicleLightState.Brake
-                else: # Remove the Brake flag
+                else:  # Remove the Brake flag
                     current_lights &= ~carla.VehicleLightState.Brake
                 if self._control.reverse:
                     current_lights |= carla.VehicleLightState.Reverse
-                else: # Remove the Reverse flag
+                else:  # Remove the Reverse flag
                     current_lights &= ~carla.VehicleLightState.Reverse
-                if current_lights != self._lights: # Change the light state only if necessary
+                if current_lights != self._lights:  # Change the light state only if necessary
                     self._lights = current_lights
                     world.player.set_light_state(carla.VehicleLightState(self._lights))
             elif isinstance(self._control, carla.WalkerControl):
@@ -567,11 +566,12 @@ def game_loop(args):
         display = pygame.display.set_mode(
             (args.width, args.height),
             pygame.HWSURFACE | pygame.DOUBLEBUF)
-        display.fill((0,0,0))
+        display.fill((0, 0, 0))
         pygame.display.flip()
 
         hud = HUD(args.width, args.height, __doc__)
-        available_towns = [town_id for town_id in client.get_available_maps() if "Opt" not in town_id and "02" not in town_id]
+        available_towns = [town_id for town_id in client.get_available_maps() if
+                           "Opt" not in town_id and "02" not in town_id]
         print("Available towns:", available_towns)
         print("Loading", args.town)
         world = World(client.load_world(args.town), hud, args)
@@ -584,16 +584,16 @@ def game_loop(args):
             clock.tick_busy_loop(60)
             if controller.parse_events(client, world, clock):
                 return
-            lane_extractor.update() # Extract lane markings
+            lane_extractor.update()  # Extract lane markings
             world.tick(clock)
             world.render(display)
             lane_extractor.visualize_lanes(display)
             pygame.display.flip()
-            
+
 
     finally:
 
-        if (world and world.recording_enabled):
+        if world and world.recording_enabled:
             client.stop_recorder()
 
         if world is not None:
@@ -642,7 +642,7 @@ def main():
     argparser.add_argument(
         '--filter',
         metavar='PATTERN',
-        default='vehicle.tesla.model3', # use 'vehicle.*' for random vehicle
+        default='vehicle.tesla.model3',  # use 'vehicle.*' for random vehicle
         help='Actor filter (default: "vehicle.tesla.model3")')
     argparser.add_argument(
         '--rolename',
@@ -683,5 +683,4 @@ def main():
 
 
 if __name__ == '__main__':
-
     main()
