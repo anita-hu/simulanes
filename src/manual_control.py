@@ -576,7 +576,7 @@ def game_loop(args):
         print("Loading", args.town)
         world = World(client.load_world(args.town), hud, args)
         controller = KeyboardControl(world, args.autopilot)
-        lane_extractor = LaneExtractor(world, args.generate_wp_map)
+        lane_extractor = LaneExtractor(world, args.generate_wp_map, verbose=True)
         lane_extractor.save_image = False
 
         clock = pygame.time.Clock()

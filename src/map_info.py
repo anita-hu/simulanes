@@ -1,6 +1,6 @@
 import sys
 
-available_towns = ['Town01', 'Town03', 'Town04', 'Town05', 'Town06', 'Town07', 'Town10']
+available_town_info = ['Town01', 'Town03', 'Town04', 'Town05', 'Town06', 'Town07', 'Town10', 'Town10HD']
 
 
 def get_town_info(town_name):
@@ -30,7 +30,7 @@ class Town01:
         3: [i for i in range(26)]
     }
     # road ids where there are errors in the lanes i.e misalignment or missing lane
-    bad_road_ids = []  # TODO
+    bad_road_ids = []
 
 
 '''
@@ -68,7 +68,7 @@ class Town05:
         10: [12, 34, 35, 36, 37, 38]
     }
     # road ids where there are errors in the lanes i.e misalignment or missing lane
-    bad_road_ids = []  # TODO
+    bad_road_ids = [7, 8, 19, 20, 22, 23, 48]
 
 
 class Town06:

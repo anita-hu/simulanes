@@ -21,6 +21,7 @@ import random
 import re
 import sys
 import weakref
+import time
 
 import pygame
 from pygame.locals import KMOD_CTRL
@@ -50,11 +51,12 @@ from agents.navigation.behavior_agent import BehaviorAgent  # pylint: disable=im
 from agents.navigation.roaming_agent import RoamingAgent  # pylint: disable=import-error
 from agents.navigation.basic_agent import BasicAgent  # pylint: disable=import-error
 
-from utils import find_weather_presets, get_actor_display_name
+from utils import find_weather_presets, get_actor_display_name, get_different_spawn_point
 from sensors import CollisionSensor, LaneInvasionSensor, GnssSensor, CameraManager
 from lane_utils import LaneExtractor
 from spawn_npc import NPCManager
 from hud import HUD
+import map_info
 
 
 class World(object):
@@ -199,6 +201,7 @@ def game_loop(args):
     tot_target_reached = 0
     num_min_waypoints = 21
     town_idx = 0
+    images_per_weather = args.images_per_town // 15
 
     try:
         client = carla.Client(args.host, args.port)
@@ -209,17 +212,19 @@ def game_loop(args):
             pygame.HWSURFACE | pygame.DOUBLEBUF)
 
         hud = HUD(args.width, args.height, __doc__)
-        available_towns = [town_id for town_id in client.get_available_maps() if "Opt" not in town_id and "02" not in town_id]
+        found_towns = [town_id.split("/")[-1] for town_id in client.get_available_maps() if "Opt" not in town_id]
+        available_towns = [town for town in found_towns if town in map_info.available_town_info]
         print("Available towns:", available_towns)
 
         while town_idx < len(available_towns):
             print("\nRunning", available_towns[town_idx])
 
+            start_time = time.time()
             world = World(client.load_world(available_towns[town_idx]), hud, args)
             npc_manager = NPCManager(args)
             controller = KeyboardControl(world)
-            lane_extractor = LaneExtractor(world)
-            
+            lane_extractor = LaneExtractor(world, verbose=args.debug)
+
             npc_manager.spawn_npc()
 
             if args.agent == "Roaming":
@@ -231,25 +236,21 @@ def game_loop(args):
                                        spawn_point.location.y,
                                        spawn_point.location.z))
             else:
-                agent = BehaviorAgent(world.player, behavior=args.behavior)
-
                 spawn_points = world.map.get_spawn_points()
-                random.shuffle(spawn_points)
-
-                if spawn_points[0].location != agent.vehicle.get_location():
-                    destination = spawn_points[0].location
-                else:
-                    destination = spawn_points[1].location
-
+                agent = BehaviorAgent(world.player, behavior=args.behavior)
+                destination = get_different_spawn_point(world, world.player)
                 agent.set_destination(agent.vehicle.get_location(), destination, clean=True)
-                
+
             clock = pygame.time.Clock()
-            ticks, stopped_count = 0, 0
-            
-            while ticks < args.max_ticks:
-                if ticks % 250 == 0:
+            stopped_count = 0
+            prev_frame_count = 0
+
+            while lane_extractor.camera.frame_count < args.images_per_town:
+                if lane_extractor.camera.frame_count != prev_frame_count and \
+                        lane_extractor.camera.frame_count % images_per_weather == 0:
+                    prev_frame_count = lane_extractor.camera.frame_count
                     world.next_weather()
-                ticks += 1
+
                 clock.tick_busy_loop(60)
                 if controller.parse_events():
                     return
@@ -257,7 +258,7 @@ def game_loop(args):
                 # As soon as the server is ready continue!
                 if not world.world.wait_for_tick(10.0):
                     continue
-                    
+
                 # Extract lane markings
                 lane_extractor.update()
 
@@ -284,33 +285,51 @@ def game_loop(args):
                     pygame.display.flip()
 
                     # Set new destination when target has been reached
-                    if len(agent.get_local_planner().waypoints_queue) < num_min_waypoints and args.loop:
+                    if len(agent.get_local_planner().waypoints_queue) < num_min_waypoints:
                         agent.reroute(spawn_points)
                         tot_target_reached += 1
                         world.hud.notification("The target has been reached " +
                                                str(tot_target_reached) + " times.", seconds=4.0)
-
-                    elif len(agent.get_local_planner().waypoints_queue) == 0 and not args.loop:
-                        print("Target reached, mission accomplished...")
-                        break
 
                     speed_limit = world.player.get_speed_limit()
                     agent.get_local_planner().set_speed(speed_limit)
 
                     control = agent.run_step()
                     world.player.apply_control(control)
-                
+
                 vehicle_velocity = world.player.get_velocity()
                 x_velocity, y_velocity = int(vehicle_velocity.x), int(vehicle_velocity.y)
                 if x_velocity == 0 and y_velocity == 0:
                     stopped_count += 1
                 else:
                     stopped_count = 0
-                
+
                 if stopped_count >= 30:
+                    stopped_count = 0
                     print("Stopped for too long...")
-                    break
-            
+                    # Respawn in another location and set new destination if needed
+                    new_spawn_location = get_different_spawn_point(world, world.player)
+                    if args.agent == "Roaming":
+                        world.player.set_location(new_spawn_location)
+                    elif args.agent == "Basic":
+                        agent.vehicle.set_location(new_spawn_location)
+                        destination = get_different_spawn_point(world, world.player)
+                        agent.set_destination((destination.location.x,
+                                               destination.location.y,
+                                               destination.location.z))
+                    elif args.agent == "Behavior":
+                        agent.vehicle.set_location(new_spawn_location)
+                        destination = get_different_spawn_point(world, world.player)
+                        agent.set_destination(agent.vehicle.get_location(), destination, clean=True)
+                    # as soon as the server is ready continue!
+                    world.world.wait_for_tick(10.0)
+
+            end_time = time.time()
+            hours, rem = divmod(end_time - start_time, 3600)
+            minutes, seconds = divmod(rem, 60)
+            print("{} done in {:0>2}:{:0>2}:{:05.2f}!".format(available_towns[town_idx], int(hours), int(minutes),
+                                                              seconds), end=" ")
+            print(f"{lane_extractor.camera.frame_count} images saved.")
             npc_manager.destory_npc()
             town_idx += 1
 
@@ -323,7 +342,7 @@ def game_loop(args):
 
 def main():
     """Main method"""
-    
+
     # automatic_control args
     argparser = argparse.ArgumentParser(
         description='CARLA Automatic Control Client')
@@ -351,18 +370,13 @@ def main():
     argparser.add_argument(
         '--filter',
         metavar='PATTERN',
-        default='vehicle.tesla.model3', # use 'vehicle.*' for random vehicle
+        default='vehicle.tesla.model3',  # use 'vehicle.*' for random vehicle
         help='Actor filter (default: "vehicle.tesla.model3")')
     argparser.add_argument(
         '--gamma',
         default=2.2,
         type=float,
         help='Gamma correction of the camera (default: 2.2)')
-    argparser.add_argument(
-        '-l', '--loop',
-        action='store_true',
-        dest='loop',
-        help='Sets a new random destination upon reaching the previous one (default: False)')
     argparser.add_argument(
         '-b', '--behavior', type=str,
         choices=["cautious", "normal", "aggressive"],
@@ -378,9 +392,9 @@ def main():
         default=None,
         type=int)
     argparser.add_argument(
-        '-m', '--max_ticks',
-        help='Set max number of ticks per map (default: 5000)',
-        default=500,
+        '-i', '--images_per_town',
+        help='Set max number of image per map (default: 5000)',
+        default=20,
         type=int)
 
     # spawn_npc args
@@ -393,7 +407,7 @@ def main():
     argparser.add_argument(
         '-w', '--num_npc_walkers',
         metavar='W',
-        default=10,
+        default=15,
         type=int,
         help='number of NPC walkers (default: 10)')
     argparser.add_argument(

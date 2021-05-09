@@ -17,7 +17,7 @@ class Side(Enum):
 
 
 class LaneExtractor:
-    def __init__(self, world, generate_wp_map=False):
+    def __init__(self, world, generate_wp_map=False, verbose=False):
         self.vehicle = world.player
         self.map = world.map
         self.world = world.world
@@ -41,6 +41,7 @@ class LaneExtractor:
         self.projection_matrix = self.camera.projection_matrix
         self.image_dim = self.camera.hud.dim
         self.lane_occlusion_mask = None
+        self.verbose = verbose
 
         if generate_wp_map:
             lane_marking_types = [
@@ -138,7 +139,7 @@ class LaneExtractor:
         i = 0
         for lane_dict in lanes:
             if (side == Side.LEFT and i >= self.max_adjacent_lanes) or \
-                    (side == Side.RIGHT and len(self.lanes) >= self.max_lanes - 2):
+                    (side == Side.RIGHT and len(self.lanes) >= self.max_lanes):
                 break
             # Extend each lane to a set distance away from the vehicle
             if lane_dict['crossed']:
@@ -193,7 +194,7 @@ class LaneExtractor:
         # At this point, points_2d[0, :] contains all the x and points_2d[1, :]
         # contains all the y values of our points. In order to properly
         # visualize everything on a screen, the points that are out of the screen
-        # must be discarted, the same with points behind the camera projection plane.
+        # must be discarded, the same with points behind the camera projection plane.
         points_2d = points_2d.T
         points_in_canvas_mask = \
             (points_2d[:, 0] > 0.0) & (points_2d[:, 0] < self.image_dim[0]) & \
@@ -273,6 +274,13 @@ class LaneExtractor:
 
         return lane_xs.tolist(), lane_class, verification_points
 
+    def lane_not_duplicate(self, new_lane):
+        for lane in self.lanes:
+            if lane["class"] == new_lane["class"]:
+                if np.array_equal(lane["xs"], new_lane["xs"]):
+                    return False
+        return True
+
     def get_marking_positions(self, lane_points, crossed, side):
         lane = []
         lane_marking_type = carla.LaneMarkingType.NONE
@@ -320,8 +328,9 @@ class LaneExtractor:
         lane_info = {'xs': lane_xs, 'class': lane_class, 'ver_points': verification_points}
 
         if len(lane_xs) >= self.min_lane_points and not self.lane_occluded(lane_info):
-            self.lanes.append(lane_info)
-            return True
+            if self.lane_not_duplicate(lane_info):
+                self.lanes.append(lane_info)
+                return True
         return False
 
     def lane_occluded(self, lane):
@@ -336,7 +345,9 @@ class LaneExtractor:
         mask_vals = self.lane_occlusion_mask[lane['ver_points'][0], lane['ver_points'][1]]
         occlusion = 1 - np.count_nonzero(mask_vals) / mask_vals.shape[0]
 
-        if occlusion > 0.9:
+        if occlusion >= 0.9:
+            if self.verbose:
+                print(f"Found occluded lane with {occlusion} occlusion")
             return True
         return False
 
@@ -352,11 +363,13 @@ class LaneExtractor:
 
     def check_lanes_correct(self):
         if map_info.is_bad_road_id(self.map.name, self.waypoint.road_id):
-            print("Bad road id, skipping frame")
+            if self.verbose:
+                print("Bad road id, skipping frame")
             return False
         gt_lane_count = map_info.get_gt_lane_count(self.map.name, self.waypoint.road_id)
         if len(self.lanes) < min(self.max_lanes, gt_lane_count):
-            print(f"Found {len(self.lanes)} lanes but GT is {min(self.max_lanes, gt_lane_count)}, skipping frame")
+            if self.verbose:
+                print(f"Found {len(self.lanes)} lanes but GT is {min(self.max_lanes, gt_lane_count)}, skipping frame")
             return False
         return True
 
@@ -368,15 +381,16 @@ class LaneExtractor:
         ego_location = self.vehicle.get_location()
         self.waypoint = self.map.get_waypoint(ego_location, project_to_road=True)
 
-        self.get_adjacent_lanes(Side.LEFT)
-        self.get_adjacent_lanes(Side.RIGHT)
-
         # Extend ego lane and get marking positions on both sides
         ego_lane_points = self.get_lane_points(self.waypoint, 1.0)
 
         # Position of the current lane
         self.get_marking_positions(ego_lane_points, False, Side.LEFT)
         self.get_marking_positions(ego_lane_points, False, Side.RIGHT)
+
+        # Position of adjacent lanes
+        self.get_adjacent_lanes(Side.LEFT)
+        self.get_adjacent_lanes(Side.RIGHT)
 
         # Do not save image and labels
         if self.waypoint.is_junction or not self.check_lanes_correct():
