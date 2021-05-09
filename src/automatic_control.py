@@ -236,9 +236,8 @@ def game_loop(args):
                                        spawn_point.location.y,
                                        spawn_point.location.z))
             else:
-                spawn_points = world.map.get_spawn_points()
                 agent = BehaviorAgent(world.player, behavior=args.behavior)
-                destination = get_different_spawn_point(world, world.player)
+                spawn_points, destination = get_different_spawn_point(world, world.player)
                 agent.set_destination(agent.vehicle.get_location(), destination, clean=True)
 
             clock = pygame.time.Clock()
@@ -308,18 +307,18 @@ def game_loop(args):
                     stopped_count = 0
                     print("Stopped for too long...")
                     # Respawn in another location and set new destination if needed
-                    new_spawn_location = get_different_spawn_point(world, world.player)
+                    _, new_spawn_location = get_different_spawn_point(world, world.player)
                     if args.agent == "Roaming":
                         world.player.set_location(new_spawn_location)
                     elif args.agent == "Basic":
                         agent.vehicle.set_location(new_spawn_location)
-                        destination = get_different_spawn_point(world, world.player)
+                        _, destination = get_different_spawn_point(world, world.player)
                         agent.set_destination((destination.location.x,
                                                destination.location.y,
                                                destination.location.z))
                     elif args.agent == "Behavior":
                         agent.vehicle.set_location(new_spawn_location)
-                        destination = get_different_spawn_point(world, world.player)
+                        spawn_points, destination = get_different_spawn_point(world, world.player)
                         agent.set_destination(agent.vehicle.get_location(), destination, clean=True)
                     # as soon as the server is ready continue!
                     world.world.wait_for_tick(10.0)
