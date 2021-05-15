@@ -561,7 +561,7 @@ def game_loop(args):
 
     try:
         client = carla.Client(args.host, args.port)
-        client.set_timeout(2.0)
+        client.set_timeout(4.0)
 
         display = pygame.display.set_mode(
             (args.width, args.height),
@@ -570,8 +570,7 @@ def game_loop(args):
         pygame.display.flip()
 
         hud = HUD(args.width, args.height, __doc__)
-        available_towns = [town_id for town_id in client.get_available_maps() if
-                           "Opt" not in town_id and "02" not in town_id]
+        available_towns = [town_id for town_id in client.get_available_maps() if "Opt" not in town_id]
         print("Available towns:", available_towns)
         print("Loading", args.town)
         world = World(client.load_world(args.town), hud, args)

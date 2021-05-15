@@ -1,6 +1,6 @@
 import sys
 
-available_town_info = ['Town01', 'Town03', 'Town04', 'Town05', 'Town06', 'Town07', 'Town10', 'Town10HD']
+available_town_info = ['Town01', 'Town03', 'Town04', 'Town05', 'Town07', 'Town10', 'Town10HD']
 
 
 def get_town_info(town_name):
@@ -71,13 +71,9 @@ class Town05:
     bad_road_ids = [7, 8, 19, 20, 22, 23, 48]
 
 
-class Town06:
-    # lane count (including curbs from both sides of the road): road ids
-    lane_count = {
-        # TODO
-    }
-    # road ids where there are errors in the lanes i.e misalignment or missing lane
-    bad_road_ids = []  # TODO
+'''
+Town 06 is skipped due to missing left curb throughout the map and lane class issues
+'''
 
 
 class Town07:
@@ -92,7 +88,9 @@ class Town07:
 class Town10:
     # lane count (including curbs from both sides of the road): road ids
     lane_count = {
-        # TODO
+        5: [12],
+        7: [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 13, 14, 15, 16, 17, 22],
+        8: [18, 19, 20, 21]
     }
     # road ids where there are errors in the lanes i.e misalignment or missing lane
-    bad_road_ids = []  # TODO
+    bad_road_ids = [4, 9, 11, 18, 19, 20, 21]
