@@ -11,23 +11,17 @@
 from __future__ import print_function
 
 import argparse
-import collections
-import datetime
 import glob
 import logging
-import math
 import os
 import random
-import re
 import sys
-import weakref
 import time
 
 import pygame
 from pygame.locals import KMOD_CTRL
 from pygame.locals import K_ESCAPE
 from pygame.locals import K_q
-import numpy as np
 
 # Find CARLA module
 try:
@@ -45,7 +39,6 @@ except IndexError:
     pass
 
 import carla
-from carla import ColorConverter as cc
 
 from agents.navigation.behavior_agent import BehaviorAgent  # pylint: disable=import-error
 from agents.navigation.roaming_agent import RoamingAgent  # pylint: disable=import-error
@@ -119,7 +112,15 @@ class World(object):
                 print('Please add some Vehicle Spawn Point to your UE4 scene.')
                 sys.exit(1)
             spawn_points = self.map.get_spawn_points()
-            spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
+            random.shuffle(spawn_points)
+            spawn_point = spawn_points[0] if spawn_points else carla.Transform()
+            spawn_waypoint = self.map.get_waypoint(spawn_point.location, project_to_road=True)
+            idx = 1
+            while map_info.is_bad_road_id(self.map.name, spawn_waypoint.road_id):
+                print(f"Bad spawn point at road id {spawn_waypoint.road_id}, changing spawn point")
+                spawn_point = spawn_points[idx]
+                spawn_waypoint = self.map.get_waypoint(spawn_point.location, project_to_road=True)
+                idx += 1
             self.player = self.world.try_spawn_actor(blueprint, spawn_point)
         # Set up the sensors.
         self.collision_sensor = CollisionSensor(self.player, self.hud)
@@ -215,6 +216,7 @@ def game_loop(args):
         found_towns = [town_id.split("/")[-1] for town_id in client.get_available_maps() if "Opt" not in town_id]
         available_towns = [town for town in found_towns if town in map_info.available_town_info]
         print("Available towns:", available_towns)
+        completed_towns = {}
 
         while town_idx < len(available_towns):
             print("\nRunning", available_towns[town_idx])
@@ -238,7 +240,12 @@ def game_loop(args):
             else:
                 agent = BehaviorAgent(world.player, behavior=args.behavior)
                 spawn_points, destination = get_different_spawn_point(world, world.player)
-                agent.set_destination(agent.vehicle.get_location(), destination, clean=True)
+                agent.set_destination(agent.vehicle.get_location(), destination.location, clean=True)
+
+            if available_towns[town_idx] in completed_towns:
+                start_time, frame_num = completed_towns[available_towns[town_idx]]
+                lane_extractor.camera.frame_count = frame_num
+                print(f"Respawned player, resuming from {frame_num} saved frames")
 
             clock = pygame.time.Clock()
             stopped_count = 0
@@ -259,7 +266,7 @@ def game_loop(args):
                     continue
 
                 # Extract lane markings
-                lane_extractor.update()
+                lane_extractor.update(clock)
 
                 if args.agent == "Roaming" or args.agent == "Basic":
                     if controller.parse_events():
@@ -303,34 +310,23 @@ def game_loop(args):
                 else:
                     stopped_count = 0
 
-                if stopped_count >= 30:
-                    stopped_count = 0
-                    print("Stopped for too long...")
-                    # Respawn in another location and set new destination if needed
-                    _, new_spawn_location = get_different_spawn_point(world, world.player)
-                    if args.agent == "Roaming":
-                        world.player.set_location(new_spawn_location)
-                    elif args.agent == "Basic":
-                        agent.vehicle.set_location(new_spawn_location)
-                        _, destination = get_different_spawn_point(world, world.player)
-                        agent.set_destination((destination.location.x,
-                                               destination.location.y,
-                                               destination.location.z))
-                    elif args.agent == "Behavior":
-                        agent.vehicle.set_location(new_spawn_location)
-                        spawn_points, destination = get_different_spawn_point(world, world.player)
-                        agent.set_destination(agent.vehicle.get_location(), destination, clean=True)
-                    # as soon as the server is ready continue!
-                    world.world.wait_for_tick(10.0)
+                if stopped_count >= 20 or lane_extractor.at_bad_road_id:
+                    lane_extractor.at_bad_road_id = False
+                    completed_towns[available_towns[town_idx]] = (start_time, world.camera_manager.frame_count)
+                    town_idx -= 1
+                    break
 
-            end_time = time.time()
-            hours, rem = divmod(end_time - start_time, 3600)
-            minutes, seconds = divmod(rem, 60)
-            print("{} done in {:0>2}:{:0>2}:{:05.2f}!".format(available_towns[town_idx], int(hours), int(minutes),
-                                                              seconds), end=" ")
-            print(f"{lane_extractor.camera.frame_count} images saved.")
-            npc_manager.destory_npc()
             town_idx += 1
+
+            if available_towns[town_idx] not in completed_towns:
+                end_time = time.time()
+                hours, rem = divmod(end_time - start_time, 3600)
+                minutes, seconds = divmod(rem, 60)
+                print("{} done in {:0>2}:{:0>2}:{:05.2f}!".format(available_towns[town_idx], int(hours), int(minutes),
+                                                                  seconds), end=" ")
+                print(f"{lane_extractor.camera.frame_count} images saved.")
+
+            npc_manager.destory_npc()
 
     finally:
         if world is not None:
@@ -392,23 +388,23 @@ def main():
         type=int)
     argparser.add_argument(
         '-i', '--images_per_town',
-        help='Set max number of image per map (default: 5000)',
-        default=20,
+        help='Set max number of image per town (default: 5000)',
+        default=470,
         type=int)
 
     # spawn_npc args
     argparser.add_argument(
         '-n', '--num_npc_vehicles',
         metavar='N',
-        default=20,
+        default=10,
         type=int,
-        help='number of NPC vehicles (default: 20)')
+        help='number of NPC vehicles (default: 10)')
     argparser.add_argument(
         '-w', '--num_npc_walkers',
         metavar='W',
-        default=15,
+        default=5,
         type=int,
-        help='number of NPC walkers (default: 10)')
+        help='number of NPC walkers (default: 5)')
     argparser.add_argument(
         '--safe',
         action='store_true',

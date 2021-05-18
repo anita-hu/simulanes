@@ -2,7 +2,6 @@ import datetime
 import math
 import os
 
-import numpy as np
 import pygame
 import carla
 

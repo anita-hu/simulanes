@@ -22,6 +22,6 @@ def get_different_spawn_point(world, player):
     random.shuffle(spawn_points)
 
     if spawn_points[0].location != player.get_location():
-        return spawn_points, spawn_points[0].location
+        return spawn_points, spawn_points[0]
     else:
-        return spawn_points, spawn_points[1].location
+        return spawn_points, spawn_points[1]

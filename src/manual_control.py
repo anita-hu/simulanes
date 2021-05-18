@@ -77,16 +77,9 @@ except IndexError:
 
 import carla
 
-from carla import ColorConverter as cc
-
 import argparse
-import collections
-import datetime
 import logging
-import math
 import random
-import re
-import weakref
 
 try:
     import pygame
@@ -583,7 +576,7 @@ def game_loop(args):
             clock.tick_busy_loop(60)
             if controller.parse_events(client, world, clock):
                 return
-            lane_extractor.update()  # Extract lane markings
+            lane_extractor.update(clock)  # Extract lane markings
             world.tick(clock)
             world.render(display)
             lane_extractor.visualize_lanes(display)

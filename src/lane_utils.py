@@ -41,6 +41,7 @@ class LaneExtractor:
         self.projection_matrix = self.camera.projection_matrix
         self.image_dim = self.camera.hud.dim
         self.lane_occlusion_mask = None
+        self.at_bad_road_id = False
         self.verbose = verbose
 
         if generate_wp_map:
@@ -364,8 +365,10 @@ class LaneExtractor:
     def check_lanes_correct(self):
         if map_info.is_bad_road_id(self.map.name, self.waypoint.road_id):
             if self.verbose:
-                print("Bad road id, skipping frame")
+                self.at_bad_road_id = True
+                print("Bad road id, respawning player")
             return False
+        self.at_bad_road_id = False
         gt_lane_count = map_info.get_gt_lane_count(self.map.name, self.waypoint.road_id)
         if len(self.lanes) < min(self.max_lanes, gt_lane_count):
             if self.verbose:
@@ -373,7 +376,7 @@ class LaneExtractor:
             return False
         return True
 
-    def update(self):
+    def update(self, clock):
         self.lane_occlusion_mask = None
         self.lanes = []
         self.world2vehicle = self.vehicle.get_transform().get_inverse_matrix()
@@ -397,7 +400,7 @@ class LaneExtractor:
             return
 
         # Save image and lane data
-        if self.save_image and self.camera.latest_image.frame % int(self.camera.hud.server_fps) == 0:
+        if self.save_image and self.camera.latest_image.frame % max(int(clock.get_fps()), 1) == 0:
             image_path = self.camera.save_frame()
             if image_path is not None:
                 self.write_lanes(image_path)

@@ -1,5 +1,4 @@
 import collections
-import datetime
 import math
 import os
 import weakref
@@ -126,7 +125,7 @@ class GnssSensor(object):
 class CameraManager(object):
     """ Class for camera management"""
 
-    def __init__(self, parent_actor, hud, gamma_correction):
+    def __init__(self, parent_actor, hud, gamma_correction, image_folder="dataset"):
         """Constructor method"""
         self.sensor = None
         self.sensor_transform = None
@@ -136,6 +135,7 @@ class CameraManager(object):
         self.latest_image = None
         self.numpy_image = None
         self.frame_count = 0
+        self.image_folder = image_folder
         bound_y = 0.5 + self._parent.bounding_box.extent.y
         attachment = carla.AttachmentType
         self._camera_transforms = [
@@ -258,11 +258,10 @@ class CameraManager(object):
     def save_frame(self):
         if self.latest_image is None:
             return None
-            
-        folder_name = datetime.datetime.now().strftime("%d-%m-%Y")
-        image_path = os.path.join(folder_name, self.hud.map_name + '_%06d.jpg' % self.frame_count)
-        if not os.path.isdir(folder_name):
-            os.mkdir(folder_name)
+
+        image_path = os.path.join(self.image_folder, self.hud.map_name + '_%06d.jpg' % self.frame_count)
+        if not os.path.isdir(self.image_folder):
+            os.mkdir(self.image_folder)
         self.latest_image.save_to_disk(image_path)
         self.frame_count += 1
         self.hud.notification("Saved image: " + image_path)

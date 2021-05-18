@@ -25,9 +25,9 @@ import carla
 
 from carla import VehicleLightState as vls
 
-import argparse
 import logging
 from numpy import random
+
 
 class NPCManager(object):
     def __init__(self, args):
