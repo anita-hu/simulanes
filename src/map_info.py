@@ -53,10 +53,15 @@ class Town03:
 class Town04:
     # lane count (including curbs from both sides of the road): road ids
     lane_count = {
-        # TODO
+        2: [31, 33, 34, 44],
+        3: [5, 14, 22, 23, 25],
+        4: [1, 7, 8, 9, 18, 19, 20, 24, 32],
+        5: [10, 11, 15, 16, 17, 26, 27, 28, 29, 30],
+        10: [6, 35, 36, 38, 39, 40, 41, 45, 46, 47, 48, 49, 50]
     }
     # road ids where there are errors in the lanes i.e misalignment or missing lane
-    bad_road_ids = []  # TODO
+    bad_road_ids = [0, 2, 3, 4, 12, 13, 37, 42, 43, 51, 52]
+    # missing: 21
 
 
 class Town05:
@@ -79,10 +84,15 @@ Town 06 is skipped due to missing left curb throughout the map and lane class is
 class Town07:
     # lane count (including curbs from both sides of the road): road ids
     lane_count = {
-        # TODO
+        0: [0, 1, 36, 37, 46, 47],
+        2: [6, 9, 10, 31, 32, 40, 45, 49, 50],
+        3: [7, 11, 20, 21, 34, 39, 41, 42, 43, 44, 52, 57, 58, 59, 60, 61, 62],
+        4: [3, 12, 13, 14, 17, 23, 24, 25, 29, 38, 55, 56],
+        5: [15]
     }
     # road ids where there are errors in the lanes i.e misalignment or missing lane
-    bad_road_ids = []  # TODO
+    bad_road_ids = [4, 5, 8, 16, 18, 25, 26, 27, 28, 33, 35, 51, 53]
+    # missing: 2, 19, 22, 30, 48, 54
 
 
 class Town10:

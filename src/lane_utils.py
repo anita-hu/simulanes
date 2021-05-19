@@ -343,6 +343,8 @@ class LaneExtractor:
             vehicle_mask = np.all(self.segmentation.numpy_image == (0, 0, 142), axis=-1)
             self.lane_occlusion_mask = road_mask | lane_mask | sidewalk_mask | vehicle_mask
 
+        if max(lane['ver_points'][0]) > self.lane_occlusion_mask.shape[0] or max(lane['ver_points'][1]) > self.lane_occlusion_mask.shape[1]:
+            return False
         mask_vals = self.lane_occlusion_mask[lane['ver_points'][0], lane['ver_points'][1]]
         occlusion = 1 - np.count_nonzero(mask_vals) / mask_vals.shape[0]
 
