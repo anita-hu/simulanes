@@ -245,6 +245,7 @@ class LaneExtractor:
         cs = CubicSpline(points[:, 1], points[:, 0])
         ys = np.array(lane_config.row_anchors)
         lane_xs = cs(ys).astype(int)
+        lane_xs = np.clip(lane_xs, 0, self.image_dim[0]-1)
         lane_xs[ys < min_y] = -2
         lane_xs[ys > max_y] = -2
 
@@ -343,8 +344,6 @@ class LaneExtractor:
             vehicle_mask = np.all(self.segmentation.numpy_image == (0, 0, 142), axis=-1)
             self.lane_occlusion_mask = road_mask | lane_mask | sidewalk_mask | vehicle_mask
 
-        if max(lane['ver_points'][0]) > self.lane_occlusion_mask.shape[0] or max(lane['ver_points'][1]) > self.lane_occlusion_mask.shape[1]:
-            return False
         mask_vals = self.lane_occlusion_mask[lane['ver_points'][0], lane['ver_points'][1]]
         occlusion = 1 - np.count_nonzero(mask_vals) / mask_vals.shape[0]
 
@@ -372,6 +371,10 @@ class LaneExtractor:
             return False
         self.at_bad_road_id = False
         gt_lane_count = map_info.get_gt_lane_count(self.map.name, self.waypoint.road_id)
+        if gt_lane_count < 0:
+            if self.verbose:
+                print(f"GT lane count not found for road id {self.waypoint.road_id}, skipping frame")
+            return False
         if len(self.lanes) < min(self.max_lanes, gt_lane_count):
             if self.verbose:
                 print(f"Found {len(self.lanes)} lanes but GT is {min(self.max_lanes, gt_lane_count)}, skipping frame")

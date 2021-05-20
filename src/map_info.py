@@ -14,7 +14,7 @@ def get_gt_lane_count(town_name, road_id):
     for count, road_ids in town.lane_count.items():
         if road_id in road_ids:
             return count
-    raise ValueError(f"Ground truth lane count for {road_id} not found in {town_name}")
+    return -1
 
 
 def is_bad_road_id(town_name, road_id):
