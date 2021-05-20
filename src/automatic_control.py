@@ -389,7 +389,7 @@ def main():
     argparser.add_argument(
         '-i', '--images_per_town',
         help='Set max number of image per town (default: 5000)',
-        default=470,
+        default=915,
         type=int)
 
     # spawn_npc args

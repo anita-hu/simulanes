@@ -252,6 +252,7 @@ class LaneExtractor:
         # Interpolate points for lane verification
         ys = np.arange(int(min_y), int(max_y) + 1)
         xs = cs(ys).astype(int)
+        xs = np.clip(xs, 0, self.image_dim[0] - 1)
         verification_points = np.vstack((ys[np.newaxis, :], xs[np.newaxis, :]))
 
         if lane_type == carla.LaneMarkingType.Broken:
