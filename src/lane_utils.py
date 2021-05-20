@@ -366,8 +366,8 @@ class LaneExtractor:
 
     def check_lanes_correct(self):
         if map_info.is_bad_road_id(self.map.name, self.waypoint.road_id):
+            self.at_bad_road_id = True
             if self.verbose:
-                self.at_bad_road_id = True
                 print("Bad road id, respawning player")
             return False
         self.at_bad_road_id = False
