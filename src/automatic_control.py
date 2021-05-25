@@ -322,7 +322,7 @@ def game_loop(args):
                 end_time = time.time()
                 hours, rem = divmod(end_time - start_time, 3600)
                 minutes, seconds = divmod(rem, 60)
-                print("{} done in {:0>2}:{:0>2}:{:05.2f}!".format(available_towns[town_idx], int(hours), int(minutes),
+                print("{} done in {:0>2}:{:0>2}:{:05.2f}!".format(available_towns[town_idx-1], int(hours), int(minutes),
                                                                   seconds), end=" ")
                 print(f"{lane_extractor.camera.frame_count} images saved.")
 

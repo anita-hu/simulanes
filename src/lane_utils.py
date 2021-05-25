@@ -43,6 +43,7 @@ class LaneExtractor:
         self.lane_occlusion_mask = None
         self.at_bad_road_id = False
         self.verbose = verbose
+        self.occluded_lane_count = 0
 
         if generate_wp_map:
             lane_marking_types = [
@@ -139,8 +140,7 @@ class LaneExtractor:
         # Extend lanes and get marking positions on correct side
         i = 0
         for lane_dict in lanes:
-            if (side == Side.LEFT and i >= self.max_adjacent_lanes) or \
-                    (side == Side.RIGHT and len(self.lanes) >= self.max_lanes):
+            if i >= self.max_adjacent_lanes:
                 break
             # Extend each lane to a set distance away from the vehicle
             if lane_dict['crossed']:
@@ -349,6 +349,7 @@ class LaneExtractor:
         occlusion = 1 - np.count_nonzero(mask_vals) / mask_vals.shape[0]
 
         if occlusion >= 0.9:
+            self.occluded_lane_count += 1
             if self.verbose:
                 print(f"Found occluded lane with {occlusion} occlusion")
             return True
@@ -376,13 +377,17 @@ class LaneExtractor:
             if self.verbose:
                 print(f"GT lane count not found for road id {self.waypoint.road_id}, skipping frame")
             return False
-        if len(self.lanes) < min(self.max_lanes, gt_lane_count):
+        gt_count = min(self.max_lanes, gt_lane_count) - self.occluded_lane_count
+        if len(self.lanes) > gt_count:
+            self.lanes = self.lanes[:gt_count]
+        if len(self.lanes) < gt_count:
             if self.verbose:
-                print(f"Found {len(self.lanes)} lanes but GT is {min(self.max_lanes, gt_lane_count)}, skipping frame")
+                print(f"Found {len(self.lanes)} lanes but GT is {gt_count}, skipping frame")
             return False
         return True
 
     def update(self, clock):
+        self.occluded_lane_count = 0
         self.lane_occlusion_mask = None
         self.lanes = []
         self.world2vehicle = self.vehicle.get_transform().get_inverse_matrix()
