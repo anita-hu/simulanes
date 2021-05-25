@@ -203,6 +203,8 @@ def game_loop(args):
     num_min_waypoints = 21
     town_idx = 0
     images_per_weather = args.images_per_town // 15
+    if args.seed is not None:
+        random.seed(args.seed)
 
     try:
         client = carla.Client(args.host, args.port)
@@ -222,6 +224,9 @@ def game_loop(args):
             print("\nRunning", available_towns[town_idx])
 
             start_time = time.time()
+            if args.seed is not None:
+                args.seed = random.randint(0, 2**32-1)
+                print("Current simulation seed", args.seed)
             world = World(client.load_world(available_towns[town_idx]), hud, args)
             npc_manager = NPCManager(args)
             controller = KeyboardControl(world)
@@ -313,6 +318,7 @@ def game_loop(args):
                     lane_extractor.at_bad_road_id = False
                     completed_towns[available_towns[town_idx]] = (start_time, world.camera_manager.frame_count)
                     town_idx -= 1
+                    args.seed += 1  # make sure spawning at different location
                     break
 
             town_idx += 1
