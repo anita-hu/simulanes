@@ -265,9 +265,6 @@ def game_loop(args):
                 if not world.world.wait_for_tick(10.0):
                     continue
 
-                # Extract lane markings
-                lane_extractor.update(clock)
-
                 if args.agent == "Roaming" or args.agent == "Basic":
                     if controller.parse_events():
                         return
@@ -277,6 +274,7 @@ def game_loop(args):
 
                     world.tick(clock)
                     world.render(display)
+                    lane_extractor.update(clock)
                     lane_extractor.visualize_lanes(display)
                     pygame.display.flip()
                     control = agent.run_step()
@@ -287,6 +285,7 @@ def game_loop(args):
 
                     world.tick(clock)
                     world.render(display)
+                    lane_extractor.update(clock)
                     lane_extractor.visualize_lanes(display)
                     pygame.display.flip()
 
@@ -388,7 +387,7 @@ def main():
         type=int)
     argparser.add_argument(
         '-i', '--images_per_town',
-        help='Set max number of image per town (default: 5000)',
+        help='Set max number of image per town (default: 915)',
         default=915,
         type=int)
 
