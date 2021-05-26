@@ -214,7 +214,6 @@ def game_loop(args):
             (args.width, args.height),
             pygame.HWSURFACE | pygame.DOUBLEBUF)
 
-        hud = HUD(args.width, args.height, __doc__)
         found_towns = [town_id.split("/")[-1] for town_id in client.get_available_maps() if "Opt" not in town_id]
         available_towns = [town for town in found_towns if town in map_info.available_town_info]
         print("Available towns:", available_towns)
@@ -227,6 +226,8 @@ def game_loop(args):
             if args.seed is not None:
                 args.seed = random.randint(0, 2**32-1)
                 print("Current simulation seed", args.seed)
+
+            hud = HUD(args.width, args.height, __doc__)
             world = World(client.load_world(available_towns[town_idx]), hud, args)
             npc_manager = NPCManager(args)
             controller = KeyboardControl(world)
@@ -332,6 +333,7 @@ def game_loop(args):
                 print(f"{lane_extractor.camera.frame_count} images saved.")
 
             npc_manager.destory_npc()
+            world.destroy()
 
     finally:
         if world is not None:

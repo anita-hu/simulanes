@@ -113,26 +113,18 @@ class LaneExtractor:
             cur_waypoint = self.waypoint.get_left_lane()
         else:
             cur_waypoint = self.waypoint.get_right_lane()
-        prev_lane_change = self.waypoint.lane_change
+        ego_lane_direction = self.waypoint.lane_id / abs(self.waypoint.lane_id)
         crossed = False
         lanes = []
 
-        while cur_waypoint is not None and cur_waypoint.lane_type == carla.LaneType.Driving:
+        while cur_waypoint is not None:
             lane_dict = {'waypoint': cur_waypoint}
-            if (side == Side.LEFT and prev_lane_change == carla.LaneChange.Right) or (
-                    side == Side.RIGHT and prev_lane_change == carla.LaneChange.Left) or prev_lane_change == carla.LaneChange.NONE:
+            cur_lane_direction = cur_waypoint.lane_id / abs(cur_waypoint.lane_id)
+            if cur_lane_direction != ego_lane_direction:
                 crossed = True
             lane_dict['crossed'] = crossed
             lanes.append(lane_dict)
-            prev_lane_change = cur_waypoint.lane_change
             if (side == Side.LEFT and crossed) or (side == Side.RIGHT and not crossed):
-                cur_waypoint = cur_waypoint.get_right_lane()
-            else:
-                cur_waypoint = cur_waypoint.get_left_lane()
-
-        while cur_waypoint is not None:
-            lanes.append({'waypoint': cur_waypoint, 'crossed': crossed})
-            if (side == Side.LEFT) or (side == Side.RIGHT):
                 cur_waypoint = cur_waypoint.get_right_lane()
             else:
                 cur_waypoint = cur_waypoint.get_left_lane()
@@ -149,7 +141,7 @@ class LaneExtractor:
                 lane_points = self.get_lane_points(lane_dict['waypoint'], 1.0)
 
             lane_added = self.get_marking_positions(lane_points, lane_dict['crossed'], side)
-            if lane_added:
+            if lane_added or self.occluded_lane_count > 0:
                 i += 1
 
     def project_to_camera(self, world_points):
@@ -277,13 +269,6 @@ class LaneExtractor:
 
         return lane_xs.tolist(), lane_class, verification_points
 
-    def lane_not_duplicate(self, new_lane):
-        for lane in self.lanes:
-            if lane["class"] == new_lane["class"]:
-                if np.array_equal(lane["xs"], new_lane["xs"]):
-                    return False
-        return True
-
     def get_marking_positions(self, lane_points, crossed, side):
         lane = []
         lane_marking_type = carla.LaneMarkingType.NONE
@@ -331,9 +316,8 @@ class LaneExtractor:
         lane_info = {'xs': lane_xs, 'class': lane_class, 'ver_points': verification_points}
 
         if len(lane_xs) >= self.min_lane_points and not self.lane_occluded(lane_info):
-            if self.lane_not_duplicate(lane_info):
-                self.lanes.append(lane_info)
-                return True
+            self.lanes.append(lane_info)
+            return True
         return False
 
     def lane_occluded(self, lane):
@@ -348,7 +332,7 @@ class LaneExtractor:
         mask_vals = self.lane_occlusion_mask[lane['ver_points'][0], lane['ver_points'][1]]
         occlusion = 1 - np.count_nonzero(mask_vals) / mask_vals.shape[0]
 
-        if occlusion >= 0.9:
+        if occlusion >= 0.6:
             self.occluded_lane_count += 1
             if self.verbose:
                 print(f"Found occluded lane with {occlusion} occlusion")
