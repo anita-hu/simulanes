@@ -17,6 +17,7 @@ import os
 import random
 import sys
 import time
+import json
 
 import pygame
 from pygame.locals import KMOD_CTRL
@@ -198,13 +199,9 @@ def game_loop(args):
 
     pygame.init()
     pygame.font.init()
-    world = None
     tot_target_reached = 0
     num_min_waypoints = 21
     town_idx = 0
-    images_per_weather = args.images_per_town // 15
-    if args.seed is not None:
-        random.seed(args.seed)
 
     try:
         client = carla.Client(args.host, args.port)
@@ -214,10 +211,24 @@ def game_loop(args):
             (args.width, args.height),
             pygame.HWSURFACE | pygame.DOUBLEBUF)
 
-        found_towns = [town_id.split("/")[-1] for town_id in client.get_available_maps() if "Opt" not in town_id]
-        available_towns = [town for town in found_towns if town in map_info.available_town_info]
-        print("Available towns:", available_towns)
-        completed_towns = {}
+        if args.resume and os.path.exists("resume_progress.json"):
+            with open("resume_progress.json", 'r') as file:
+                prev_session = json.load(file)
+            completed_towns = prev_session["completed"]
+            available_towns = prev_session["towns"]
+            town_idx = prev_session["idx"]
+            print("Resuming previous session:")
+            print(prev_session)
+        else:
+            found_towns = [town_id.split("/")[-1] for town_id in client.get_available_maps() if "Opt" not in town_id]
+            available_towns = [town for town in found_towns if town in map_info.available_town_info]
+            print("Available towns:", available_towns)
+            completed_towns = {}
+
+        images_per_weather = args.images_per_town // 15
+
+        if args.seed is not None:
+            random.seed(args.seed)
 
         while town_idx < len(available_towns):
             print("\nRunning", available_towns[town_idx])
@@ -335,10 +346,16 @@ def game_loop(args):
             npc_manager.destory_npc()
             world.destroy()
 
-    finally:
-        if world is not None:
-            world.destroy()
+            with open('resume_progress.json', 'w') as save_file:
+                session_info = {
+                    'args': vars(args),
+                    'towns': available_towns,
+                    'idx': town_idx,
+                    'completed': completed_towns
+                }
+                json.dump(session_info, save_file)
 
+    finally:
         pygame.quit()
 
 
@@ -398,6 +415,10 @@ def main():
         help='Set max number of image per town (default: 915)',
         default=915,
         type=int)
+    argparser.add_argument(
+        '-r', '--resume',
+        action='store_true',
+        help='Continue from previous session resume_progress.json file')
 
     # spawn_npc args
     argparser.add_argument(
@@ -447,6 +468,13 @@ def main():
         help='Enanble car lights')
 
     args = argparser.parse_args()
+
+    if args.resume and os.path.exists("resume_progress.json"):
+        with open("resume_progress.json", 'r') as file:
+            prev_session = json.load(file)
+        saved_args = argparse.Namespace()
+        saved_args.__dict__.update(prev_session["args"])
+        args = argparser.parse_args(namespace=saved_args)
 
     args.width, args.height = [int(x) for x in args.res.split('x')]
 
