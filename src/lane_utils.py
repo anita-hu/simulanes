@@ -44,6 +44,7 @@ class LaneExtractor:
         self.at_bad_road_id = False
         self.verbose = verbose
         self.occluded_lane_count = 0
+        self.at_right_most_lane = False
 
         if generate_wp_map:
             lane_marking_types = [
@@ -143,6 +144,9 @@ class LaneExtractor:
             lane_added = self.get_marking_positions(lane_points, lane_dict['crossed'], side)
             if lane_added or self.occluded_lane_count > 0:
                 i += 1
+
+        if side == Side.RIGHT and i == 0:
+            self.at_right_most_lane = True
 
     def project_to_camera(self, world_points):
         if not world_points:
@@ -364,6 +368,8 @@ class LaneExtractor:
         gt_count = min(self.max_lanes, gt_lane_count) - self.occluded_lane_count
         if len(self.lanes) > gt_count:
             self.lanes = self.lanes[:gt_count]
+        if self.at_right_most_lane and gt_lane_count >= 4:
+            gt_count -= 1
         if len(self.lanes) < gt_count:
             if self.verbose:
                 print(f"Found {len(self.lanes)} lanes but GT is {gt_count}, skipping frame")
@@ -371,6 +377,7 @@ class LaneExtractor:
         return True
 
     def update(self, clock):
+        self.at_right_most_lane = False
         self.occluded_lane_count = 0
         self.lane_occlusion_mask = None
         self.lanes = []
