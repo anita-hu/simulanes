@@ -205,7 +205,7 @@ def game_loop(args):
 
     try:
         client = carla.Client(args.host, args.port)
-        client.set_timeout(4.0)
+        client.set_timeout(10.0)
 
         display = pygame.display.set_mode(
             (args.width, args.height),
@@ -330,12 +330,11 @@ def game_loop(args):
                     lane_extractor.at_bad_road_id = False
                     completed_towns[available_towns[town_idx]] = (start_time, world.camera_manager.frame_count)
                     town_idx -= 1
-                    args.seed += 1  # make sure spawning at different location
                     break
 
             town_idx += 1
 
-            if available_towns[town_idx] not in completed_towns:
+            if world.camera_manager.frame_count == args.images_per_town:
                 end_time = time.time()
                 hours, rem = divmod(end_time - start_time, 3600)
                 minutes, seconds = divmod(rem, 60)
