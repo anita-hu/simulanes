@@ -250,6 +250,7 @@ class LaneExtractor:
         xs = cs(ys).astype(int)
         xs = np.clip(xs, 0, self.image_dim[0] - 1)
         verification_points = np.vstack((ys[np.newaxis, :], xs[np.newaxis, :]))
+        ego_lane_direction = self.waypoint.lane_id / abs(self.waypoint.lane_id)
 
         if lane_type == carla.LaneMarkingType.Broken:
             lane_class = 1
@@ -260,9 +261,9 @@ class LaneExtractor:
         elif lane_type == carla.LaneMarkingType.SolidSolid:
             lane_class = 7
         elif lane_type == carla.LaneMarkingType.SolidBroken:
-            lane_class = 9
+            lane_class = 9 if ego_lane_direction == -1 else 11
         elif lane_type == carla.LaneMarkingType.BrokenSolid:
-            lane_class = 11
+            lane_class = 11 if ego_lane_direction == -1 else 9
         elif lane_type == carla.LaneMarkingType.BottsDots:
             lane_class = 13
         elif lane_type == carla.LaneMarkingType.Curb:
