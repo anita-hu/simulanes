@@ -45,6 +45,8 @@ class LaneExtractor:
         self.verbose = verbose
         self.occluded_lane_count = 0
         self.at_right_most_lane = False
+        self.prev_ego_loc = None
+        self.min_save_distance = 1.0  # must drive 1 meter away to save another image
 
         if generate_wp_map:
             lane_marking_types = [
@@ -401,9 +403,15 @@ class LaneExtractor:
         # Do not save image and labels
         if self.waypoint.is_junction or not self.check_lanes_correct():
             return
+            
+        # Do not save if too close to previous image save location
+        if self.prev_ego_loc is not None and ego_location.distance(self.prev_ego_loc) < self.min_save_distance:
+            return
 
         # Save image and lane data
         if self.save_image and self.camera.latest_image.frame % max(int(clock.get_fps()), 1) == 0:
             image_path = self.camera.save_frame()
             if image_path is not None:
                 self.write_lanes(image_path)
+                self.prev_ego_loc = ego_location
+

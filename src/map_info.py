@@ -41,13 +41,13 @@ Town 02 is skipped due to lane misalignment issues throughout the map
 class Town03:
     # lane count (including curbs from both sides of the road): road ids
     lane_count = {
-        5: [59, 61, 62],
-        7: [17, 18, 19, 20, 21, 22, 23, 41, 42, 43, 73, 74, 75],
+        5: [59, 62],
+        7: [17, 18, 19, 20, 21, 22, 23, 41, 42, 43, 74, 75],
         8: [0, 1, 2, 3, 4, 5, 6, 7, 8, 65, 66, 67, 68, 69],
     }
     # road ids where there are errors in the lanes i.e misalignment or missing lane
     bad_road_ids = [7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 24, 25, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 44, 46,
-                    47, 48, 49, 50, 51, 52, 60, 65, 75, 76, 77, 78, 79, 80]
+                    47, 48, 49, 50, 51, 52, 60, 61, 65, 66, 73, 75, 76, 77, 78, 79, 80]
 
 
 class Town04:

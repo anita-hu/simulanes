@@ -73,8 +73,8 @@ class World(object):
         self.gnss_sensor = None
         self.camera_manager = None
         self.segmentation_manager = None
-        self._weather_presets = find_weather_presets()
-        self._weather_index = 0
+        self.weather_presets = find_weather_presets()
+        self.weather_index = args.weather_index
         self._actor_filter = args.filter
         self._gamma = args.gamma
         self.restart(args)
@@ -135,12 +135,16 @@ class World(object):
         self.segmentation_manager.set_sensor(seg_index, notify=False)
         actor_type = get_actor_display_name(self.player)
         self.hud.notification(actor_type)
+        # Initial weather
+        preset = self.weather_presets[self.weather_index]
+        self.hud.notification('Initial weather: %s' % preset[1])
+        self.player.get_world().set_weather(preset[0])
 
     def next_weather(self, reverse=False):
         """Get next weather setting"""
-        self._weather_index += -1 if reverse else 1
-        self._weather_index %= len(self._weather_presets)
-        preset = self._weather_presets[self._weather_index]
+        self.weather_index += -1 if reverse else 1
+        self.weather_index %= len(self.weather_presets)
+        preset = self.weather_presets[self.weather_index]
         self.hud.notification('Weather: %s' % preset[1])
         self.player.get_world().set_weather(preset[0])
 
@@ -217,6 +221,7 @@ def game_loop(args):
             completed_towns = prev_session["completed"]
             available_towns = prev_session["towns"]
             town_idx = prev_session["idx"]
+            args.weather_idx = prev_session["weather_idx"]
             print("Resuming previous session:")
             print(prev_session)
         else:
@@ -224,8 +229,6 @@ def game_loop(args):
             available_towns = [town for town in found_towns if town in map_info.available_town_info]
             print("Available towns:", available_towns)
             completed_towns = {}
-
-        images_per_weather = args.images_per_town // 15
 
         if args.seed is not None:
             random.seed(args.seed)
@@ -240,6 +243,7 @@ def game_loop(args):
 
             hud = HUD(args.width, args.height, __doc__)
             world = World(client.load_world(available_towns[town_idx]), hud, args)
+            images_per_weather = args.images_per_town // len(world.weather_presets)
             npc_manager = NPCManager(args)
             controller = KeyboardControl(world)
             lane_extractor = LaneExtractor(world, verbose=args.debug)
@@ -273,6 +277,7 @@ def game_loop(args):
                         lane_extractor.camera.frame_count % images_per_weather == 0:
                     prev_frame_count = lane_extractor.camera.frame_count
                     world.next_weather()
+                    print("Weather changed")
 
                 clock.tick_busy_loop(60)
                 if controller.parse_events():
@@ -326,13 +331,14 @@ def game_loop(args):
                 else:
                     stopped_count = 0
 
-                if stopped_count >= 20 or lane_extractor.at_bad_road_id:
+                if stopped_count >= 15 or lane_extractor.at_bad_road_id:
                     lane_extractor.at_bad_road_id = False
                     completed_towns[available_towns[town_idx]] = (start_time, world.camera_manager.frame_count)
                     town_idx -= 1
                     break
 
             town_idx += 1
+            args.weather_index = world.weather_index
 
             if world.camera_manager.frame_count == args.images_per_town:
                 end_time = time.time()
@@ -350,7 +356,8 @@ def game_loop(args):
                     'args': vars(args),
                     'towns': available_towns,
                     'idx': town_idx,
-                    'completed': completed_towns
+                    'completed': completed_towns,
+                    'weather_idx': world.weather_index
                 }
                 json.dump(session_info, save_file)
 
@@ -403,7 +410,7 @@ def main():
     argparser.add_argument("-a", "--agent", type=str,
                            choices=["Behavior", "Roaming", "Basic"],
                            help="select which agent to run",
-                           default="Roaming")
+                           default="Behavior")
     argparser.add_argument(
         '-s', '--seed',
         help='Set seed for repeating executions (default: None)',
@@ -411,9 +418,14 @@ def main():
         type=int)
     argparser.add_argument(
         '-i', '--images_per_town',
-        help='Set max number of image per town (default: 915)',
-        default=915,
+        help='Set max number of image per town (default: 545)',
+        default=545,
         type=int)
+    argparser.add_argument(
+        '--weather_index',
+        default=0,
+        type=int,
+        help='Initial weather index')
     argparser.add_argument(
         '-r', '--resume',
         action='store_true',
