@@ -33,7 +33,6 @@ Use ARROWS or WASD keys for control.
     ` or N       : next sensor
     [1-9]        : change to sensor [1-9]
     G            : toggle radar visualization
-    C            : change weather (Shift+C reverse)
     Backspace    : change vehicle
 
     V            : Select next map layer (Shift+V reverse)
@@ -76,6 +75,7 @@ except IndexError:
 
 
 import carla
+from carla import VehicleLightState as vls
 
 import argparse
 import logging
@@ -128,8 +128,9 @@ try:
 except ImportError:
     raise RuntimeError('cannot import numpy, make sure numpy package is installed')
 
-from utils import find_weather_presets, get_actor_display_name
+from utils import get_actor_display_name
 from sensors import CollisionSensor, LaneInvasionSensor, GnssSensor, CameraManager, IMUSensor, RadarSensor
+from dynamic_weather import Weather
 from lane_utils import LaneExtractor
 from hud import HUD
 
@@ -160,8 +161,8 @@ class World(object):
         self.radar_sensor = None
         self.camera_manager = None
         self.segmentation_manager = None
-        self._weather_presets = find_weather_presets()
-        self._weather_index = 0
+        self._weather_speed_factor = 0.001
+        self._weather = Weather(carla_world.get_weather())
         self._actor_filter = args.filter
         self._gamma = args.gamma
         self.restart()
@@ -249,12 +250,17 @@ class World(object):
         actor_type = get_actor_display_name(self.player)
         self.hud.notification(actor_type)
 
-    def next_weather(self, reverse=False):
-        self._weather_index += -1 if reverse else 1
-        self._weather_index %= len(self._weather_presets)
-        preset = self._weather_presets[self._weather_index]
-        self.hud.notification('Weather: %s' % preset[1])
-        self.player.get_world().set_weather(preset[0])
+    def update_weather(self, clock):
+        self._weather.tick(self._weather_speed_factor*clock.get_fps())
+        self.world.set_weather(self._weather.weather)
+        sys.stdout.write('\r' + str(self._weather) + 12 * ' ')
+        sys.stdout.flush()
+        
+        # turn on vehicle lights at night
+        light_state = vls.NONE
+        if self._weather.weather.sun_altitude_angle < 0:
+            light_state = vls.Position | vls.LowBeam
+        self.player.set_light_state(carla.VehicleLightState(light_state))
 
     def next_map_layer(self, reverse=False):
         self.current_map_layer += -1 if reverse else 1
@@ -285,6 +291,7 @@ class World(object):
 
     def tick(self, clock):
         self.hud.tick(self, clock)
+        self.update_weather(clock)
 
     def render(self, display):
         self.camera_manager.render(display)
@@ -370,10 +377,6 @@ class KeyboardControl(object):
                     world.hud.help.toggle()
                 elif event.key == K_TAB:
                     world.camera_manager.toggle_camera()
-                elif event.key == K_c and pygame.key.get_mods() & KMOD_SHIFT:
-                    world.next_weather(reverse=True)
-                elif event.key == K_c:
-                    world.next_weather()
                 elif event.key == K_g:
                     world.toggle_radar()
                 elif event.key == K_BACKQUOTE:
@@ -567,11 +570,13 @@ def game_loop(args):
         print("Available towns:", available_towns)
         print("Loading", args.town)
         world = World(client.load_world(args.town), hud, args)
+        
         controller = KeyboardControl(world, args.autopilot)
         lane_extractor = LaneExtractor(world, args.generate_wp_map, verbose=True)
         lane_extractor.save_image = False
 
         clock = pygame.time.Clock()
+        
         while True:
             clock.tick_busy_loop(60)
             if controller.parse_events(client, world, clock):

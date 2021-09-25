@@ -40,13 +40,15 @@ except IndexError:
     pass
 
 import carla
+from carla import VehicleLightState as vls
 
 from agents.navigation.behavior_agent import BehaviorAgent  # pylint: disable=import-error
 from agents.navigation.roaming_agent import RoamingAgent  # pylint: disable=import-error
 from agents.navigation.basic_agent import BasicAgent  # pylint: disable=import-error
 
-from utils import find_weather_presets, get_actor_display_name, get_different_spawn_point
+from utils import get_actor_display_name, get_different_spawn_point
 from sensors import CollisionSensor, LaneInvasionSensor, GnssSensor, CameraManager
+from dynamic_weather import Weather
 from lane_utils import LaneExtractor
 from spawn_npc import NPCManager
 from hud import HUD
@@ -73,8 +75,8 @@ class World(object):
         self.gnss_sensor = None
         self.camera_manager = None
         self.segmentation_manager = None
-        self.weather_presets = find_weather_presets()
-        self.weather_index = args.weather_index
+        self._weather_speed_factor = 0.05
+        self.weather = None
         self._actor_filter = args.filter
         self._gamma = args.gamma
         self.restart(args)
@@ -135,22 +137,30 @@ class World(object):
         self.segmentation_manager.set_sensor(seg_index, notify=False)
         actor_type = get_actor_display_name(self.player)
         self.hud.notification(actor_type)
-        # Initial weather
-        preset = self.weather_presets[self.weather_index]
-        self.hud.notification('Initial weather: %s' % preset[1])
-        self.player.get_world().set_weather(preset[0])
+        # Initialize weather
+        self.weather = Weather(self.world.get_weather())
+        if args.resume_weather is not None:
+            print("Resuming weather state")
+            self.weather.resume_state(args.resume_weather)
+            self.world.set_weather(self.weather.weather)
 
-    def next_weather(self, reverse=False):
-        """Get next weather setting"""
-        self.weather_index += -1 if reverse else 1
-        self.weather_index %= len(self.weather_presets)
-        preset = self.weather_presets[self.weather_index]
-        self.hud.notification('Weather: %s' % preset[1])
-        self.player.get_world().set_weather(preset[0])
+    def update_weather(self, clock):
+        self.weather.tick(self._weather_speed_factor*clock.get_fps())
+        self.world.set_weather(self.weather.weather)
+        sys.stdout.write('\r' + str(self.weather) + 12 * ' ')
+        sys.stdout.flush()
+        # turn on vehicle lights at night
+        light_state = vls.NONE
+        if self.weather.weather.sun_altitude_angle < 0:
+            light_state = vls.Position | vls.LowBeam
+        for actor in self.world.get_actors():
+            if actor.type_id.startswith("vehicle"):
+                actor.set_light_state(carla.VehicleLightState(light_state))
 
     def tick(self, clock):
         """Method for every tick"""
         self.hud.tick(self, clock)
+        self.update_weather(clock)
 
     def render(self, display):
         """Render world"""
@@ -218,17 +228,21 @@ def game_loop(args):
         if args.resume and os.path.exists("resume_progress.json"):
             with open("resume_progress.json", 'r') as file:
                 prev_session = json.load(file)
+            args = argparse.Namespace(**prev_session["args"])
             completed_towns = prev_session["completed"]
             available_towns = prev_session["towns"]
             town_idx = prev_session["idx"]
-            args.weather_idx = prev_session["weather_idx"]
             print("Resuming previous session:")
             print(prev_session)
         else:
+            args.resume_weather = None
             found_towns = [town_id.split("/")[-1] for town_id in client.get_available_maps() if "Opt" not in town_id]
             available_towns = [town for town in found_towns if town in map_info.available_town_info]
             print("Available towns:", available_towns)
             completed_towns = {}
+        
+        max_npc_walkers = args.num_npc_walkers
+        max_npc_vehicles = args.num_npc_vehicles
 
         if args.seed is not None:
             random.seed(args.seed)
@@ -243,7 +257,9 @@ def game_loop(args):
 
             hud = HUD(args.width, args.height, __doc__)
             world = World(client.load_world(available_towns[town_idx]), hud, args)
-            images_per_weather = args.images_per_town // len(world.weather_presets)
+            # Randomize number of NPCs
+            args.num_npc_walkers = random.randint(0, max_npc_walkers)
+            args.num_npc_vehicles = random.randint(0, max_npc_vehicles)
             npc_manager = NPCManager(args)
             controller = KeyboardControl(world)
             lane_extractor = LaneExtractor(world, verbose=args.debug)
@@ -270,15 +286,8 @@ def game_loop(args):
 
             clock = pygame.time.Clock()
             stopped_count = 0
-            prev_frame_count = 0
 
             while lane_extractor.camera.frame_count < args.images_per_town:
-                if lane_extractor.camera.frame_count != prev_frame_count and \
-                        lane_extractor.camera.frame_count % images_per_weather == 0:
-                    prev_frame_count = lane_extractor.camera.frame_count
-                    world.next_weather()
-                    print("Weather changed")
-
                 clock.tick_busy_loop(60)
                 if controller.parse_events():
                     return
@@ -334,34 +343,34 @@ def game_loop(args):
                 if stopped_count >= 15 or lane_extractor.at_bad_road_id:
                     lane_extractor.at_bad_road_id = False
                     completed_towns[available_towns[town_idx]] = (start_time, world.camera_manager.frame_count)
-                    town_idx -= 1
                     break
-
-            town_idx += 1
-            args.weather_index = world.weather_index
-
+            
             if world.camera_manager.frame_count == args.images_per_town:
                 end_time = time.time()
                 hours, rem = divmod(end_time - start_time, 3600)
                 minutes, seconds = divmod(rem, 60)
-                print("{} done in {:0>2}:{:0>2}:{:05.2f}!".format(available_towns[town_idx-1], int(hours), int(minutes),
+                print("{} done in {:0>2}:{:0>2}:{:05.2f}!".format(available_towns[town_idx], int(hours), int(minutes),
                                                                   seconds), end=" ")
                 print(f"{lane_extractor.camera.frame_count} images saved.")
-
+                town_idx += 1
+            else:
+                args.resume_weather = world.weather.export_state()
+            
             npc_manager.destory_npc()
             world.destroy()
 
-            with open('resume_progress.json', 'w') as save_file:
-                session_info = {
-                    'args': vars(args),
-                    'towns': available_towns,
-                    'idx': town_idx,
-                    'completed': completed_towns,
-                    'weather_idx': world.weather_index
-                }
-                json.dump(session_info, save_file)
-
     finally:
+        with open('resume_progress.json', 'w') as save_file:
+            args.num_npc_walkers = max_npc_walkers
+            args.num_npc_vehicles = max_npc_vehicles
+            session_info = {
+                'args': vars(args),
+                'towns': available_towns,
+                'idx': town_idx,
+                'completed': completed_towns,
+            }
+            json.dump(session_info, save_file)
+
         pygame.quit()
 
 
@@ -422,11 +431,6 @@ def main():
         default=545,
         type=int)
     argparser.add_argument(
-        '--weather_index',
-        default=0,
-        type=int,
-        help='Initial weather index')
-    argparser.add_argument(
         '-r', '--resume',
         action='store_true',
         help='Continue from previous session resume_progress.json file')
@@ -435,35 +439,35 @@ def main():
     argparser.add_argument(
         '-n', '--num_npc_vehicles',
         metavar='N',
-        default=10,
+        default=20,
         type=int,
-        help='number of NPC vehicles (default: 10)')
+        help='Max number of NPC vehicles (default: 20)')
     argparser.add_argument(
         '-w', '--num_npc_walkers',
         metavar='W',
-        default=5,
+        default=10,
         type=int,
-        help='number of NPC walkers (default: 5)')
+        help='Max number of NPC walkers (default: 10)')
     argparser.add_argument(
         '--safe',
         action='store_true',
-        help='avoid spawning vehicles prone to accidents')
+        help='Avoid spawning vehicles prone to accidents')
     argparser.add_argument(
         '--filterv',
         metavar='PATTERN',
         default='vehicle.*',
-        help='vehicles filter (default: "vehicle.*")')
+        help='Vehicles filter (default: "vehicle.*")')
     argparser.add_argument(
         '--filterw',
         metavar='PATTERN',
         default='walker.pedestrian.*',
-        help='pedestrians filter (default: "walker.pedestrian.*")')
+        help='Pedestrians filter (default: "walker.pedestrian.*")')
     argparser.add_argument(
         '--tm_port',
         metavar='P',
         default=8000,
         type=int,
-        help='port to communicate with TM (default: 8000)')
+        help='Port to communicate with TM (default: 8000)')
     argparser.add_argument(
         '--sync',
         action='store_true',

@@ -102,7 +102,7 @@ class NPCManager(object):
             # prepare the light state of the cars to spawn
             light_state = vls.NONE
             if args.car_lights_on:
-                light_state = vls.Position | vls.LowBeam | vls.LowBeam
+                light_state = vls.Position | vls.LowBeam
 
             # spawn the cars and set their autopilot and light state all together
             batch.append(SpawnActor(blueprint, transform)
