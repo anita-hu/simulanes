@@ -13,6 +13,7 @@ from __future__ import print_function
 import argparse
 import glob
 import logging
+import math
 import os
 import random
 import sys
@@ -241,6 +242,7 @@ def game_loop(args):
             print("Available towns:", available_towns)
             completed_towns = {}
         
+        images_per_town = math.ceil(args.num_images / len(available_towns))
         max_npc_walkers = args.num_npc_walkers
         max_npc_vehicles = args.num_npc_vehicles
 
@@ -287,7 +289,7 @@ def game_loop(args):
             clock = pygame.time.Clock()
             stopped_count = 0
 
-            while lane_extractor.camera.frame_count < args.images_per_town:
+            while lane_extractor.camera.frame_count < images_per_town:
                 clock.tick_busy_loop(60)
                 if controller.parse_events():
                     return
@@ -345,7 +347,7 @@ def game_loop(args):
                     completed_towns[available_towns[town_idx]] = (start_time, world.camera_manager.frame_count)
                     break
             
-            if world.camera_manager.frame_count == args.images_per_town:
+            if world.camera_manager.frame_count == images_per_town:
                 end_time = time.time()
                 hours, rem = divmod(end_time - start_time, 3600)
                 minutes, seconds = divmod(rem, 60)
@@ -355,22 +357,22 @@ def game_loop(args):
                 town_idx += 1
             else:
                 args.resume_weather = world.weather.export_state()
+
+            with open('resume_progress.json', 'w') as save_file:
+                args.num_npc_walkers = max_npc_walkers
+                args.num_npc_vehicles = max_npc_vehicles
+                session_info = {
+                    'args': vars(args),
+                    'towns': available_towns,
+                    'idx': town_idx,
+                    'completed': completed_towns,
+                }
+                json.dump(session_info, save_file)
             
             npc_manager.destory_npc()
             world.destroy()
 
     finally:
-        with open('resume_progress.json', 'w') as save_file:
-            args.num_npc_walkers = max_npc_walkers
-            args.num_npc_vehicles = max_npc_vehicles
-            session_info = {
-                'args': vars(args),
-                'towns': available_towns,
-                'idx': town_idx,
-                'completed': completed_towns,
-            }
-            json.dump(session_info, save_file)
-
         pygame.quit()
 
 
@@ -426,9 +428,9 @@ def main():
         default=None,
         type=int)
     argparser.add_argument(
-        '-i', '--images_per_town',
-        help='Set max number of image per town (default: 545)',
-        default=545,
+        '-i', '--num_images',
+        help='Set total number of image to generate (default: 1000)',
+        default=1000,
         type=int)
     argparser.add_argument(
         '-r', '--resume',
@@ -439,9 +441,9 @@ def main():
     argparser.add_argument(
         '-n', '--num_npc_vehicles',
         metavar='N',
-        default=20,
+        default=30,
         type=int,
-        help='Max number of NPC vehicles (default: 20)')
+        help='Max number of NPC vehicles (default: 30)')
     argparser.add_argument(
         '-w', '--num_npc_walkers',
         metavar='W',
@@ -475,12 +477,12 @@ def main():
     argparser.add_argument(
         '--hybrid',
         action='store_true',
-        help='Enanble')
+        help='Enable hybrid physics mode')
     argparser.add_argument(
         '--car_lights_on',
         action='store_true',
         default=False,
-        help='Enanble car lights')
+        help='Enable car lights at spawn')
 
     args = argparser.parse_args()
 

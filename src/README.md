@@ -4,7 +4,7 @@ The following sections provide info for some important files
 ### Data collection
 `automatic_control.py` and `manual_control.py` share the same code for lane extraction in `lane_utils.py`.
 - `automatic_control.py` is used for automatic data collection
-- `manual_control.py` is used for debugging
+- `manual_control.py` is used for debugging and gathering map info where images are not saved
 
 ### Data format
 Lane labels are saved in the TuSimple format. 
