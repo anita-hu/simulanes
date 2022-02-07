@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2019 Computer Vision Center (CVC) at the Universitat Autonoma de
+# Modified work Copyright (c) 2021 Anita Hu, Martin Ethier.
+# Original work Copyright (c) 2019 Computer Vision Center (CVC) at the Universitat Autonoma de
 # Barcelona (UAB).
 #
 # This work is licensed under the terms of the MIT license.
 # For a copy, see <https://opensource.org/licenses/MIT>.
+#
+# Original source: https://github.com/carla-simulator/carla/blob/0.9.11/PythonAPI/examples/dynamic_weather.py
 
 """
 CARLA Dynamic Weather:

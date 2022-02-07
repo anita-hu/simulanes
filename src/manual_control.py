@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2019 Computer Vision Center (CVC) at the Universitat Autonoma de
+# Modified work Copyright (c) 2021 Anita Hu.
+# Original work Copyright (c) 2019 Computer Vision Center (CVC) at the Universitat Autonoma de
 # Barcelona (UAB).
 #
 # This work is licensed under the terms of the MIT license.
 # For a copy, see <https://opensource.org/licenses/MIT>.
+#
+# Original source: https://github.com/carla-simulator/carla/blob/0.9.11/PythonAPI/examples/manual_control.py
 
 # Allows controlling a vehicle with a keyboard. For a simpler and more
 # documented example, please take a look at tutorial.py.

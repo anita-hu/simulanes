@@ -1,3 +1,8 @@
+# Copyright (c) 2021 Anita Hu, Martin Ethier.
+#
+# This work is licensed under the terms of the MIT license.
+# For a copy, see <https://opensource.org/licenses/MIT>.
+
 import carla
 import numpy as np
 import pygame

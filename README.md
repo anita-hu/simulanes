@@ -1,5 +1,11 @@
 # Simulanes
 
+CARLA synthetic dataset generator for the paper [Sim-to-Real Domain Adaptation for Lane Detection and Classification in Autonomous Driving](). 
+If you use our dataset generator or our simulation dataset, please cite our paper:
+```
+
+```
+
 ## Usage
 
 ### Carla server
@@ -79,7 +85,7 @@ python3.7 manual_control.py [-t TOWN]
 
 ## Reference
 
-Our code is built upon PythonAPI/examples from [carla](https://github.com/carla-simulator/carla/tree/master/PythonAPI/examples) git repository.
+Our code is built upon PythonAPI/examples from [carla-simulator/carla](https://github.com/carla-simulator/carla/tree/master/PythonAPI/examples).
 
 If it is helpful for your work, please cite:
 

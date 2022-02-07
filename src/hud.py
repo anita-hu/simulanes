@@ -1,3 +1,12 @@
+# Modified work Copyright (c) 2021 Anita Hu, Martin Ethier.
+# Original work Copyright (c) 2018 Intel Labs.
+# authors: German Ros (german.ros@intel.com)
+#
+# This work is licensed under the terms of the MIT license.
+# For a copy, see <https://opensource.org/licenses/MIT>.
+#
+# Original source: https://github.com/carla-simulator/carla/blob/master/PythonAPI/examples/automatic_control.py
+
 import datetime
 import math
 import os
