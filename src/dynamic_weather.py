@@ -48,7 +48,9 @@ class Sun(object):
         self._t %= 2.0 * math.pi
         self.azimuth += 0.25 * delta_seconds
         self.azimuth %= 360.0
-        self.altitude = (50 * math.sin(self._t)) + 40  # 80% day time, 20% night time
+        # altitude range [-90, 90] maps to [midnight, midday]
+        self.altitude = (45 * math.sin(self._t)) + 45  # 100% day
+        # self.altitude = (50 * math.sin(self._t)) + 40  # 80% day 20% night, between 12pm and 7pm
     
     def export_state(self):
         return (self.azimuth, self.altitude, self._t)
