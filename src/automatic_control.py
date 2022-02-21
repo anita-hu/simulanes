@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2018 Intel Labs.
+# Modified work Copyright (c) 2021 Anita Hu, Martin Ethier.
+# Original work Copyright (c) 2018 Intel Labs.
 # authors: German Ros (german.ros@intel.com)
 #
 # This work is licensed under the terms of the MIT license.
 # For a copy, see <https://opensource.org/licenses/MIT>.
+#
+# Original source: https://github.com/carla-simulator/carla/blob/0.9.11/PythonAPI/examples/automatic_control.py
 
 """Example of automatic vehicle control from client side."""
 

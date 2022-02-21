@@ -1,3 +1,8 @@
+# Copyright (c) 2021 Anita Hu, Martin Ethier.
+#
+# This work is licensed under the terms of the MIT license.
+# For a copy, see <https://opensource.org/licenses/MIT>.
+
 import sys
 
 available_town_info = ['Town01', 'Town03', 'Town04', 'Town05', 'Town07', 'Town10', 'Town10HD']

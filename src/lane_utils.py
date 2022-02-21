@@ -1,3 +1,8 @@
+# Copyright (c) 2021 Anita Hu, Martin Ethier.
+#
+# This work is licensed under the terms of the MIT license.
+# For a copy, see <https://opensource.org/licenses/MIT>.
+
 import carla
 import numpy as np
 import pygame
@@ -93,8 +98,9 @@ class LaneExtractor:
                 x, y = locations[len(locations) // 2]
                 plt.text(x, y, road_id)
 
-            plt.savefig(os.path.join(self.debug_plot_path, self.map.name + "_road_IDs.png"))
-            print("Debug plot saved")
+            save_path = os.path.join(self.debug_plot_path, self.map.name + "_road_IDs.png")
+            plt.savefig(save_path)
+            print("Debug plot saved at", save_path)
 
     def get_lane_points(self, waypoint, distance):
         lane = []

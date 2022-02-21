@@ -1,4 +1,18 @@
+[![arXiv](https://img.shields.io/badge/arXiv-2202.07133-b31b1b.svg)](https://arxiv.org/abs/2202.07133)
 # Simulanes
+
+CARLA synthetic dataset generator for the paper [Sim-to-Real Domain Adaptation for Lane Detection and Classification in Autonomous Driving](https://arxiv.org/abs/2202.07133). 
+If you use our dataset generator or our [simulation dataset](https://drive.google.com/drive/folders/19kydbyO17dtieTar_5AS0hnXHDMHE4lk?usp=sharing), please cite our paper:
+```
+@misc{hu2022simtoreal,
+      title={Sim-to-Real Domain Adaptation for Lane Detection and Classification in Autonomous Driving}, 
+      author={Chuqing Hu and Sinclair Hudson and Martin Ethier and Mohammad Al-Sharman and Derek Rayside and William Melek},
+      year={2022},
+      eprint={2202.07133},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
+```
 
 ## Usage
 
@@ -76,10 +90,14 @@ For manual control, run this Python script instead:
 ```
 python3.7 manual_control.py [-t TOWN]
 ```
+See [src/README.md](./src/README.md) for details on our code such as
+- Data format
+- Adding new maps
+- Dynamic weather configuration
 
 ## Reference
 
-Our code is built upon PythonAPI/examples from [carla](https://github.com/carla-simulator/carla/tree/master/PythonAPI/examples) git repository.
+Our code is built upon PythonAPI/examples from [carla-simulator/carla](https://github.com/carla-simulator/carla/tree/master/PythonAPI/examples).
 
 If it is helpful for your work, please cite:
 
